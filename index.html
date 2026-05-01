@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2D リアルドライビングシミュレーター</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #228B22; /* コース外は緑色 */
+            touch-action: none; /* デフォルトのタッチアクションを無効化 */
+            font-family: sans-serif;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            text-shadow: 1px 1px 2px black;
+            pointer-events: none;
+            z-index: 10;
+        }
+        #start-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 1.5rem;
+            z-index: 20;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="start-overlay">画面をタッチしてスタート（音声が出ます）</div>
+    <div id="ui-layer">
+        <div>速度: <span id="speed-disp">0</span> km/h</div>
+        <div style="font-size: 0.8rem; margin-top: 5px;">
+            【操作】<br>
+            画面下部の丸を指でスライド<br>
+            ・左右：ハンドル<br>
+            ・上：アクセル / 下：ブレーキ<br>
+            （FF駆動: アクセルオンでアンダーステア強）
+        </div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const overlay = document.getElementById('start-overlay');
+    
+    // キャンバスリサイズ
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // ==========================================
+    // オーディオ設定 (Web Audio API)
+    // ==========================================
+    let audioCtx = null;
+    let engineOsc = null;
+    let engineGain = null;
+    let brakeNoise = null;
+    let brakeGain = null;
+    let isAudioInitialized = false;
+
+    function initAudio() {
+        if (isAudioInitialized) return;
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // エンジン音（ノコギリ波）
+        engineOsc = audioCtx.createOscillator();
+        engineOsc.type = 'sawtooth';
+        engineGain = audioCtx.createGain();
+        let engineFilter = audioCtx.createBiquadFilter();
+        engineFilter.type = 'lowpass';
+        engineFilter.frequency.value = 600;
+        
+        engineOsc.connect(engineFilter);
+        engineFilter.connect(engineGain);
+        engineGain.connect(audioCtx.destination);
+        engineOsc.start();
+        engineGain.gain.value = 0;
+
+        // ブレーキ音（ホワイトノイズ）
+        const bufferSize = audioCtx.sampleRate * 2;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+        brakeNoise = audioCtx.createBufferSource();
+        brakeNoise.buffer = buffer;
+        brakeNoise.loop = true;
+        
+        let brakeFilter = audioCtx.createBiquadFilter();
+        brakeFilter.type = 'bandpass';
+        brakeFilter.frequency.value = 2500; // スキール音に近い帯域
+        brakeFilter.Q.value = 1.0;
+        brakeGain = audioCtx.createGain();
+        
+        brakeNoise.connect(brakeFilter);
+        brakeFilter.connect(brakeGain);
+        brakeGain.connect(audioCtx.destination);
+        brakeNoise.start();
+        brakeGain.gain.value = 0;
+
+        isAudioInitialized = true;
+    }
+
+    // 初回タッチでオーディオ起動
+    document.addEventListener('pointerdown', () => {
+        if (!isAudioInitialized) {
+            initAudio();
+            overlay.style.display = 'none';
+        }
+        if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+    }, { once: false });
+
+    function updateAudio(speed, accel, brake) {
+        if (!isAudioInitialized || !audioCtx) return;
+        
+        // エンジン音のピッチと音量更新
+        let targetFreq = 50 + speed * 3 + accel * 80;
+        engineOsc.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.1);
+        let targetGain = 0.05 + accel * 0.1;
+        engineGain.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.1);
+
+        // ブレーキ音の音量更新（ある程度速度がある時のみ）
+        let targetBrakeGain = (brake > 0.1 && speed > 2.0) ? brake * 0.3 : 0;
+        brakeGain.gain.setTargetAtTime(targetBrakeGain, audioCtx.currentTime, 0.05);
+    }
+
+    // ==========================================
+    // 入力処理 (1つのジョイスティック)
+    // ==========================================
+    let inputSteer = 0; // -1 (左) to 1 (右)
+    let inputAccel = 0; // 0 to 1
+    let inputBrake = 0; // 0 to 1
+
+    let touchControl = { active: false, id: null, startX: 0, startY: 0, currentX: 0, currentY: 0 };
+    const UI_RADIUS = 100; // 操作円の半径
+
+    // 操作UIの中心座標を取得する
+    function getUICenter() {
+        return {
+            x: canvas.width / 2,
+            y: canvas.height - 150
+        };
+    }
+
+    function updateInputs() {
+        let diffX = touchControl.currentX - touchControl.startX;
+        let diffY = touchControl.currentY - touchControl.startY;
+
+        // X軸はステアリング (左右)
+        inputSteer = Math.max(-1, Math.min(1, diffX / UI_RADIUS));
+        
+        // Y軸はアクセル/ブレーキ (上下)
+        let valY = Math.max(-1, Math.min(1, diffY / UI_RADIUS));
+        if (valY < 0) {
+            // 上方向(マイナス)ならアクセル
+            inputAccel = -valY;
+            inputBrake = 0;
+        } else {
+            // 下方向(プラス)ならブレーキ
+            inputAccel = 0;
+            inputBrake = valY;
+        }
+    }
+
+    function handlePointerDown(e) {
+        if (!touchControl.active) {
+            const center = getUICenter();
+            let dx = e.clientX - center.x;
+            let dy = e.clientY - center.y;
+            
+            // 操作用の丸の中（判定を少し広めに設定）をタッチしたか判定
+            if (dx*dx + dy*dy <= UI_RADIUS * UI_RADIUS * 2.0) {
+                touchControl.active = true;
+                touchControl.id = e.pointerId;
+                touchControl.startX = center.x;
+                touchControl.startY = center.y;
+                touchControl.currentX = e.clientX;
+                touchControl.currentY = e.clientY;
+                updateInputs();
+            }
+        }
+    }
+
+    function handlePointerMove(e) {
+        if (touchControl.active && e.pointerId === touchControl.id) {
+            touchControl.currentX = e.clientX;
+            touchControl.currentY = e.clientY;
+            updateInputs();
+        }
+    }
+
+    function handlePointerUp(e) {
+        if (touchControl.active && e.pointerId === touchControl.id) {
+            touchControl.active = false;
+            inputSteer = 0;
+            inputAccel = 0;
+            inputBrake = 0;
+        }
+    }
+
+    canvas.addEventListener('pointerdown', handlePointerDown);
+    canvas.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+
+    // ==========================================
+    // 物理シミュレーション (車両モデル)
+    // ==========================================
+    
+    // 車両パラメータ (カローラスポーツ等のCセグメントハッチバックを想定)
+    const mass = 1350; // 質量 (kg)
+    const Iz = 1900; // ヨー慣性モーメント (kg*m^2)
+    
+    // FF車はフロントヘビーなので、前軸への荷重を大きめに設定
+    const lf = 1.1; // 重心から前輪までの距離 (m)
+    const lr = 1.5; // 重心から後輪までの距離 (m)
+    const L = lf + lr; // ホイールベース
+    const T = 1.53; // トレッド幅 (m)
+    const h = 0.5; // 重心高 (m)
+    const mu = 1.0; // 路面摩擦係数
+    
+    // アンダーステア傾向
+    const C_alpha_f = 60000; // 前輪
+    const C_alpha_r = 85000; // 後輪 (滑りにくく)
+    
+    const g = 9.81;
+
+    // 状態変数ベクトル: [x, y, yaw, u(前後速度), v(横滑り速度), r(ヨーレート)]
+    let state = [0, 0, 0, 0.1, 0, 0];
+    let prev_ax = 0; // 前ステップの前後加速度
+    let prev_ay = 0; // 前ステップの横加速度
+    let loads = [0, 0, 0, 0]; // 描画用の各輪荷重 [fl, fr, rl, rr]
+
+    // 運動方程式（状態の微分を返す）
+    function getDerivatives(S, steerInput, accelInput, brakeInput, current_ax, current_ay) {
+        let [x, y, yaw, u, v, r] = S;
+
+        // 特異点回避のための微小速度処理
+        let u_safe = Math.max(Math.abs(u), 0.5) * Math.sign(u);
+        if (Math.abs(u) < 0.1) u_safe = 0.1;
+
+        // 1. 荷重計算 (静的荷重 + 加速度による動的荷重移動)
+        let Fz_static_f = mass * g * lr / L / 2;
+        let Fz_static_r = mass * g * lf / L / 2;
+
+        let dFz_pitch = mass * current_ax * h / L / 2;
+        let dFz_roll_f  = mass * current_ay * h / T * 0.6; // ロール剛性配分(前60:後40)
+        let dFz_roll_r  = mass * current_ay * h / T * 0.4;
+
+        let Fz_fl = Math.max(0.1, Fz_static_f - dFz_pitch + dFz_roll_f);
+        let Fz_fr = Math.max(0.1, Fz_static_f - dFz_pitch - dFz_roll_f);
+        let Fz_rl = Math.max(0.1, Fz_static_r + dFz_pitch + dFz_roll_r);
+        let Fz_rr = Math.max(0.1, Fz_static_r + dFz_pitch - dFz_roll_r);
+        loads = [Fz_fl, Fz_fr, Fz_rl, Fz_rr]; // 描画用保存
+
+        // 2. ステアリング角
+        let delta = steerInput * (Math.PI / 5); // 最大舵角36度
+
+        // 3. 各輪のスリップ角計算
+        let alpha_fl = delta - Math.atan2(v + lf * r, u_safe - T/2 * r);
+        let alpha_fr = delta - Math.atan2(v + lf * r, u_safe + T/2 * r);
+        let alpha_rl =       - Math.atan2(v - lr * r, u_safe - T/2 * r);
+        let alpha_rr =       - Math.atan2(v - lr * r, u_safe + T/2 * r);
+
+        // 4. 縦力（駆動力・制動力）の計算
+        let engineForce = accelInput * 4500; // エンジン出力
+        let brakeForce = brakeInput * 11000; 
+
+        // ★FF車: 駆動は前輪のみ。制動は前7:後3の配分
+        // ハンドルを切っている方向(delta)に駆動力が働く
+        let Fx_fl = engineForce * 0.5 - brakeForce * 0.35 * Math.sign(u);
+        let Fx_fr = engineForce * 0.5 - brakeForce * 0.35 * Math.sign(u);
+        let Fx_rl = - brakeForce * 0.15 * Math.sign(u);
+        let Fx_rr = - brakeForce * 0.15 * Math.sign(u);
+
+        // 空気抵抗と転がり抵抗
+        let drag = -0.5 * u * Math.abs(u) - 25 * u;
+        Fx_rl += drag/2; Fx_rr += drag/2;
+
+        // 5. タイヤ横力計算（摩擦円と荷重依存を考慮）
+        function getTireForceY(alpha, Fz, Fx, C_alpha_param) {
+            // 利用可能な最大摩擦力
+            let max_F = mu * Fz;
+            // 摩擦円: 縦力(Fx)を使うと横力(Fy)の限界が下がる
+            let available_Fy = Math.sqrt(Math.max(0, max_F**2 - Fx**2));
+            
+            // 荷重依存のコーナリングフォース (Fz基準値に対する比率)
+            let nominal_Fz = mass * g / 4;
+            let Fy = C_alpha_param * alpha * (Fz / nominal_Fz);
+            
+            // 低速時の発散防止減衰
+            if (Math.abs(u) < 2.0) {
+                Fy *= Math.abs(u) / 2.0;
+            }
+
+            // 摩擦円でクリップ
+            return Math.max(-available_Fy, Math.min(available_Fy, Fy));
+        }
+
+        // FF車の場合、前輪に大きな駆動力がかかると摩擦円を使い切り、横力が減少する（プッシュアンダー）
+        let Fy_fl = getTireForceY(alpha_fl, Fz_fl, Fx_fl, C_alpha_f);
+        let Fy_fr = getTireForceY(alpha_fr, Fz_fr, Fx_fr, C_alpha_f);
+        let Fy_rl = getTireForceY(alpha_rl, Fz_rl, Fx_rl, C_alpha_r);
+        let Fy_rr = getTireForceY(alpha_rr, Fz_rr, Fx_rr, C_alpha_r);
+
+        // 6. 合力とモーメント
+        // 前輪はステアリング角(delta)の方向に力が向く
+        let sumFx = Fx_fl * Math.cos(delta) - Fy_fl * Math.sin(delta) +
+                    Fx_fr * Math.cos(delta) - Fy_fr * Math.sin(delta) +
+                    Fx_rl + Fx_rr;
+
+        let sumFy = Fx_fl * Math.sin(delta) + Fy_fl * Math.cos(delta) +
+                    Fx_fr * Math.sin(delta) + Fy_fr * Math.cos(delta) +
+                    Fy_rl + Fy_rr;
+
+        let sumMz = lf * ( (Fx_fl * Math.sin(delta) + Fy_fl * Math.cos(delta)) + (Fx_fr * Math.sin(delta) + Fy_fr * Math.cos(delta)) )
+                  - lr * (Fy_rl + Fy_rr)
+                  + (T/2) * ( -(Fx_fl * Math.cos(delta) - Fy_fl * Math.sin(delta)) + (Fx_fr * Math.cos(delta) - Fy_fr * Math.sin(delta)) - Fx_rl + Fx_rr );
+
+        // 7. 微分方程式
+        let du = sumFx / mass + v * r;
+        let dv = sumFy / mass - u * r;
+        let dr = sumMz / Iz;
+
+        let dx = u * Math.cos(yaw) - v * Math.sin(yaw);
+        let dy = u * Math.sin(yaw) + v * Math.cos(yaw);
+        let dyaw = r;
+
+        // 超低速時の不自然な横滑りとヨーを減衰（キネマティックな補正）
+        if (Math.abs(u) < 1.0 && accelInput === 0 && brakeInput === 0) {
+            dv -= v * 10;
+            dr -= r * 10;
+            du -= u * 2;
+        }
+
+        return [dx, dy, dyaw, du, dv, dr];
+    }
+
+    // ルンゲクッタ法 (RK4) による積分
+    function stepRK4(dt) {
+        // 現在の加速度を推定（荷重計算用）
+        let derivs = getDerivatives(state, inputSteer, inputAccel, inputBrake, prev_ax, prev_ay);
+        prev_ax = derivs[3] - state[4] * state[5]; // ax = u' - vr
+        prev_ay = derivs[4] + state[3] * state[5]; // ay = v' + ur
+
+        let k1 = getDerivatives(state, inputSteer, inputAccel, inputBrake, prev_ax, prev_ay);
+        
+        let state_k2 = state.map((val, i) => val + k1[i] * dt * 0.5);
+        let k2 = getDerivatives(state_k2, inputSteer, inputAccel, inputBrake, prev_ax, prev_ay);
+        
+        let state_k3 = state.map((val, i) => val + k2[i] * dt * 0.5);
+        let k3 = getDerivatives(state_k3, inputSteer, inputAccel, inputBrake, prev_ax, prev_ay);
+        
+        let state_k4 = state.map((val, i) => val + k3[i] * dt);
+        let k4 = getDerivatives(state_k4, inputSteer, inputAccel, inputBrake, prev_ax, prev_ay);
+
+        for (let i = 0; i < state.length; i++) {
+            state[i] += (k1[i] + 2*k2[i] + 2*k3[i] + k4[i]) * dt / 6;
+        }
+    }
+
+    // ==========================================
+    // 描画処理
+    // ==========================================
+    const SCALE = 12; // 1メートル = 12ピクセル
+    const COURSE_RADIUS = 33; // 8の字の円の半径(m)
+    
+    // 車の画面内での固定表示位置
+    let carDisplayX = 0;
+    let carDisplayY = 0;
+
+    function drawCourse() {
+        ctx.lineWidth = 10 * SCALE; // コース幅10m
+        ctx.strokeStyle = '#808080'; // 灰色ベタ塗り
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // 8の字の左の円
+        ctx.beginPath();
+        ctx.arc(-COURSE_RADIUS * SCALE, 0, COURSE_RADIUS * SCALE, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 8の字の右の円
+        ctx.beginPath();
+        ctx.arc(COURSE_RADIUS * SCALE, 0, COURSE_RADIUS * SCALE, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // センターライン（おまけ）
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.setLineDash([20, 20]);
+        ctx.beginPath();
+        ctx.arc(-COURSE_RADIUS * SCALE, 0, COURSE_RADIUS * SCALE, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(COURSE_RADIUS * SCALE, 0, COURSE_RADIUS * SCALE, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // コースの中心地点に小さな×印
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-10, -10); ctx.lineTo(10, 10);
+        ctx.moveTo(10, -10); ctx.lineTo(-10, 10);
+        ctx.stroke();
+    }
+
+    // 車は常に定位置に描画されるため、x, y, yawのワールド変換は外側で行う
+    function drawCarFixed() {
+        const carWidth = 1.8 * SCALE;
+        const carLength = 4.3 * SCALE; // ハッチバックの長さ
+        const tireWidth = 0.4 * SCALE;
+        const tireLength = 0.8 * SCALE;
+
+        // 車体（ベースの白）
+        ctx.fillStyle = '#F5F5F5'; // ややオフホワイト
+        ctx.fillRect(-lr * SCALE, -carWidth/2, carLength, carWidth);
+        
+        // フロントガラスのみ（黒で進行方向を示す）
+        ctx.fillStyle = '#222222';
+        // 車体の重心(0)から少し前方に配置
+        ctx.fillRect(0.3 * SCALE, -carWidth/2 + 2, 0.8 * SCALE, carWidth - 4);
+        
+        // 輪郭線
+        ctx.strokeStyle = '#CCCCCC';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-lr * SCALE, -carWidth/2, carLength, carWidth);
+
+        // タイヤを描画する関数
+        const drawTire = (offsetX, offsetY, steerAngle, load) => {
+            ctx.save();
+            ctx.translate(offsetX * SCALE, offsetY * SCALE);
+            ctx.rotate(steerAngle);
+            
+            // 荷重に応じてタイヤの濃さを変える（荷重がかかると黒く、抜けると薄く）
+            let loadRatio = load / (mass * g / 4);
+            let alpha = Math.max(0.2, Math.min(1.0, loadRatio * 0.8));
+            ctx.fillStyle = `rgba(20, 20, 20, ${alpha})`;
+            
+            ctx.fillRect(-tireLength/2, -tireWidth/2, tireLength, tireWidth);
+            // 枠線
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-tireLength/2, -tireWidth/2, tireLength, tireWidth);
+            ctx.restore();
+        };
+
+        let delta = inputSteer * (Math.PI / 5);
+
+        // [fl, fr, rl, rr] の順番で描画
+        drawTire(lf, -T/2, delta, loads[0]); // 左前
+        drawTire(lf,  T/2, delta, loads[1]); // 右前
+        drawTire(-lr, -T/2, 0, loads[2]);     // 左後
+        drawTire(-lr,  T/2, 0, loads[3]);     // 右後
+    }
+
+    function drawUI() {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0); // 画面固定座標系へ
+
+        const center = getUICenter();
+
+        // ジョイスティックの背景円
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.beginPath(); ctx.arc(center.x, center.y, UI_RADIUS, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 十字のガイドライン
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(center.x - UI_RADIUS, center.y);
+        ctx.lineTo(center.x + UI_RADIUS, center.y);
+        ctx.moveTo(center.x, center.y - UI_RADIUS);
+        ctx.lineTo(center.x, center.y + UI_RADIUS);
+        ctx.stroke();
+
+        // 操作中のつまみの位置計算
+        let posX = center.x + inputSteer * UI_RADIUS;
+        let posY = center.y;
+        if (inputAccel > 0) posY -= inputAccel * UI_RADIUS;
+        if (inputBrake > 0) posY += inputBrake * UI_RADIUS;
+        
+        // 色を変える（アクセル：緑寄り、ブレーキ：赤寄り）
+        if (inputAccel > 0) ctx.fillStyle = 'rgba(100, 255, 100, 0.9)';
+        else if (inputBrake > 0) ctx.fillStyle = 'rgba(255, 100, 100, 0.9)';
+        else ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+
+        ctx.beginPath(); ctx.arc(posX, posY, 25, 0, Math.PI*2); ctx.fill();
+
+        ctx.restore();
+    }
+
+    // コース中心方向を示す矢印の描画
+    function drawNavigationArrow() {
+        const carX = state[0];
+        const carY = state[1];
+        
+        // 車からコース中心(0,0)へのベクトルと距離
+        const dx = 0 - carX;
+        const dy = 0 - carY;
+        const dist = Math.hypot(dx, dy);
+
+        // 80m以上離れたら表示開始、120mで完全に不透明
+        if (dist < 80) return;
+        const alpha = Math.min(1.0, (dist - 80) / 40);
+
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0); // 画面固定座標系へ
+
+        // 車から中心へのワールド座標系での角度
+        const targetAngle = Math.atan2(dy, dx);
+        
+        // 画面上での角度を計算
+        // 車のyaw角が画面の上(-Y方向, -90度)にマッピングされている
+        const screenAngle = targetAngle - state[2] - Math.PI / 2;
+
+        // 矢印を配置する画面端の座標を計算 (Ray-Box Intersection)
+        let dirX = Math.cos(screenAngle);
+        let dirY = Math.sin(screenAngle);
+        
+        const pad = 40; // 画面端からの余白
+        const minX = pad, maxX = canvas.width - pad;
+        const minY = pad, maxY = canvas.height - pad;
+
+        let t = Infinity;
+        if (dirX > 0) t = Math.min(t, (maxX - carDisplayX) / dirX);
+        else if (dirX < 0) t = Math.min(t, (minX - carDisplayX) / dirX);
+        
+        if (dirY > 0) t = Math.min(t, (maxY - carDisplayY) / dirY);
+        else if (dirY < 0) t = Math.min(t, (minY - carDisplayY) / dirY);
+
+        const arrowX = carDisplayX + t * dirX;
+        const arrowY = carDisplayY + t * dirY;
+
+        // 矢印の描画
+        ctx.translate(arrowX, arrowY);
+        // 三角形が上を向くように作成するので、進行方向に向けてさらに90度(π/2)足す
+        ctx.rotate(screenAngle + Math.PI / 2); 
+        
+        ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`; // ゴールドイエロー
+        ctx.beginPath();
+        ctx.moveTo(0, -20); // 先端
+        ctx.lineTo(15, 15);
+        ctx.lineTo(-15, 15);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.strokeStyle = `rgba(0, 0, 0, ${alpha})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 距離テキストの描画 (文字は回転させない)
+        ctx.rotate(-(screenAngle + Math.PI / 2));
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        // 矢印より少し内側に文字を配置
+        ctx.fillText(`${Math.floor(dist)}m`, -dirX * 35, -dirY * 35);
+        
+        ctx.restore();
+    }
+
+    // ==========================================
+    // メインループ
+    // ==========================================
+    let lastTime = 0;
+
+    function gameLoop(timestamp) {
+        if (!lastTime) lastTime = timestamp;
+        let deltaTime = (timestamp - lastTime) / 1000;
+        lastTime = timestamp;
+
+        if (deltaTime > 0.1) deltaTime = 0.1; // フレームレート低下時の爆発防止
+
+        carDisplayX = canvas.width / 2;
+        carDisplayY = canvas.height * 0.6; // 画面中央より少し下
+
+        // シミュレーション (RK4)
+        const subSteps = 4;
+        const dt = deltaTime / subSteps;
+        for (let i = 0; i < subSteps; i++) {
+            stepRK4(dt);
+        }
+
+        // サウンドの更新
+        let speedKmH = Math.abs(state[3]) * 3.6;
+        updateAudio(speedKmH / 3.6, inputAccel, inputBrake);
+        document.getElementById('speed-disp').innerText = Math.floor(speedKmH);
+
+        // 描画
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.save();
+        
+        // -----------------------------
+        // ワールド（コース）の描画
+        // -----------------------------
+        ctx.translate(carDisplayX, carDisplayY);
+        // 車が常に上(画面の-Y方向)を向くようにワールド全体を回転
+        ctx.rotate(-Math.PI / 2 - state[2]);
+        // ワールドの原点を自車位置の分だけ逆にずらす
+        ctx.translate(-state[0] * SCALE, -state[1] * SCALE);
+        drawCourse();
+
+        ctx.restore();
+
+        // -----------------------------
+        // 自車の描画
+        // -----------------------------
+        ctx.save();
+        ctx.translate(carDisplayX, carDisplayY);
+        // 前方(ローカル+X)を上(画面-Y)に向ける
+        ctx.rotate(-Math.PI / 2);
+        drawCarFixed();
+        ctx.restore();
+
+        // UIとナビゲーションの描画
+        drawNavigationArrow();
+        drawUI();
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    // 初期位置設定
+    state[1] = COURSE_RADIUS; // 右円の上部からスタート
+
+    requestAnimationFrame(gameLoop);
+
+</script>
+</body>
+</html>
