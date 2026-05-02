@@ -70,6 +70,11 @@
         .rank-2 { color: #C0C0C0; font-weight: bold; }
         .rank-3 { color: #cd7f32; font-weight: bold; }
         
+        .credits {
+            margin-top: 30px; font-size: 0.7rem; color: #888; text-align: center; line-height: 1.6;
+            max-width: 400px;
+        }
+
         #ui-layer {
             position: absolute; top: 10px; left: 10px;
             color: white; text-shadow: 1px 1px 2px black;
@@ -126,6 +131,16 @@
             </div>
         </div>
         <p style="margin-top: 20px; font-size: 0.8rem; color: #888;">※各コースの自己ベストはゴーストとして出現します</p>
+        
+        <div class="credits">
+            Credits<br>
+            - Game Design & Programming: yudai1966<br>
+            - Code Assistance: Gemini (Google)<br>
+            - Database: Google Firebase<br>
+            - Font: M PLUS 1p (SIL Open Font License)<br>
+            <br>
+            本ゲームに登場する名称、車両、デザインはすべて架空のものであり、実在の人物・団体・企業とは一切関係ありません。
+        </div>
     </div>
 
     <div id="result-layer" class="overlay hidden" style="justify-content: center;">
@@ -259,7 +274,6 @@
         setTimeout(() => { el.style.opacity = 0; el.style.transform = "translate(-50%, -50%) scale(1.0)"; }, 1200);
     }
 
-    // ゲート作成関数: 判定ラインの幅を最適化し、隣のコースとの誤判定を防止
     function createGate(x, y, width, yaw) {
         let detectionWidth = Math.max(width * 2.0, 60); 
         let dx = Math.cos(yaw + Math.PI/2) * (detectionWidth/2);
@@ -351,13 +365,12 @@
                 drawStartLine(ctx, 0, 40, 10, Math.PI);
             },
             gates: [
-                // BUG FIX: 直角コーナーのゲート位置と方向を修正。角ではなく直線の中間に配置
                 createGate(0, 40, 20, Math.PI), 
                 createGate(-40, 40, 20, Math.PI), 
                 createGate(-60, 20, 20, -Math.PI/2), 
-                createGate(-40, 0, 20, -Math.PI/2), // 下向きに修正
-                createGate(-30, -20, 20, 0),        // 右向きに修正し、直線の中間へ
-                createGate(-20, -30, 20, -Math.PI/2), // 下向きに修正し、直線の中間へ
+                createGate(-40, 0, 20, -Math.PI/2), 
+                createGate(-30, -20, 20, 0),        
+                createGate(-20, -30, 20, -Math.PI/2), 
                 createGate(10, -40, 20, 0), 
                 createGate(40, -40, 20, 0), 
                 createGate(60, -20, 20, Math.PI/2), 
@@ -619,7 +632,6 @@
             if (Math.abs(Fx) > max_F * 0.9) slipRatio += 0.5; 
             
             let slip = Math.max(0, slipRatio - 0.95); 
-            // 荷重補正：アウト側により強く痕が出るように
             let loadFactor = Fz / (car.mass * g / 4);
             return slip * loadFactor;
         }
@@ -688,7 +700,7 @@
             if (p.life <= 0) {
                 particles.splice(i, 1);
             } else {
-                let alpha = p.life * 0.06;
+                let alpha = p.life * 0.06; // 薄い煙
                 ctx.fillStyle = `rgba(200, 200, 200, ${alpha})`;
                 ctx.beginPath(); 
                 ctx.arc(p.x * SCALE, p.y * SCALE, p.size * SCALE, 0, Math.PI * 2); 
