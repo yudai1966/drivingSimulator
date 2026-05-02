@@ -358,7 +358,8 @@
     };
 
     // ==========================================
-    // オーディオ設定・制御 (+3dB 調整版)
+    // オーディオ設定・制御
+    // 限界の指標・極限状態の悲鳴など、物理メカニズムを反映したリアルスキール
     // ==========================================
     let audioCtx = null, engineOsc = null, engineGain = null;
     let skidOsc = null, skidNoise = null, skidMix = null, skidFilter = null, skidGain = null;
@@ -383,7 +384,7 @@
         engineOsc.start(); 
         engineGain.gain.value = 0;
 
-        // --- タイヤ摩擦音 (PDF物理モデル反映版) ---
+        // --- タイヤ摩擦音 ---
         // 1. スティックスリップの基本波 (ノコギリ波)
         skidOsc = audioCtx.createOscillator();
         skidOsc.type = 'sawtooth'; 
@@ -407,7 +408,7 @@
         skidOsc.connect(skidMix);
         noiseGain.connect(skidMix);
 
-        // 3. コンタクトパッチ変形による縦溝共鳴フィルター (500〜4500Hzの広い帯域をカバー)
+        // 3. コンタクトパッチ変形による縦溝共鳴フィルター
         skidFilter = audioCtx.createBiquadFilter();
         skidFilter.type = 'bandpass'; 
         skidFilter.frequency.value = 500; 
@@ -417,7 +418,7 @@
 
         // 4. 励起振動 (マクロなビビり・チャタリング) を再現するAM変調
         skidLfo = audioCtx.createOscillator();
-        skidLfo.type = 'sawtooth'; // ダッ・ダッという引っかかり
+        skidLfo.type = 'sawtooth'; 
         skidLfo.frequency.value = 40; 
         
         skidLfoGain = audioCtx.createGain();
@@ -463,11 +464,9 @@
 
         // --- 物理ベース スキール音の制御 ---
         let maxSlip = 0;
-        let totalSlip = 0;
         
         for (let i = 0; i < 4; i++) {
             let slip = slips[i] || 0;
-            totalSlip += slip;
             if (slip > maxSlip) maxSlip = slip;
             
             // 熱の蓄積 (PDF: 摩擦熱による摩擦係数の低下とピッチアップ現象)
@@ -481,33 +480,51 @@
         let maxHeat = Math.max(...tireHeat);
 
         // -------------------------------------------------------------
-        // ★ 音量のデシベル計算 (+3dB 調整)
-        // エンジン最大ゲインは 0.15 (0.05 + 1.0 * 0.1)。
-        // 振幅比で +3dB 持ち上げるには 10^(3/20) ≒ 1.4125 倍する
+        // ★ 限界の指標としての「デッドゾーン」と「非線形の立ち上がり」
         // -------------------------------------------------------------
+        let deadZone = 0.04; // スリップの許容範囲（無音ゾーン）
+        let effectiveSlip = Math.max(0, maxSlip - deadZone);
+        
+        // ピークを超えてトラクションが抜け始めた瞬間に急激に立ち上げるため 1.8乗を使用
+        let slipPower = Math.pow(Math.min(1.0, effectiveSlip * 2.5), 1.8);
+        let dynamicSlipGain = (speed > 2.0) ? Math.min(1.0, slipPower) : 0;
+
+        // 音量のデシベル計算 (+3dB 調整)
+        // エンジン最大ゲインは 0.15。振幅比で +3dB は約 1.4125 倍
         const maxEngineGain = 0.15;
         const skidGainMultiplier = maxEngineGain * Math.pow(10, 3/20); // 約 0.2119
         
-        let slipGain = (speed > 2.0) ? Math.min(1.0, totalSlip * 0.4) : 0;
+        let targetSkidGain = Math.max(dynamicSlipGain, (brake > 0.8 && speed > 2.0) ? 0.8 : 0) * skidGainMultiplier; 
         
-        // エンジンの最大音量よりも +3dB 分だけ大きくなるように係数を掛ける
-        let targetSkidGain = Math.max(slipGain, (brake > 0.8 && speed > 2.0) ? 0.8 : 0) * skidGainMultiplier; 
-        
+        // -------------------------------------------------------------
+        // ★ 限界域での極限状態（ドアンダー、フルロック時の悲鳴）
+        // -------------------------------------------------------------
+        let extremeThreshold = 0.35; // 限界を大きく超えたと判定するスリップ量
+        let extremeSlipFactor = Math.max(0, maxSlip - extremeThreshold) * 2.0; 
+        extremeSlipFactor = Math.min(1.0, extremeSlipFactor); // 0.0 〜 1.0
+
         // 1. スティックスリップ基本波のピッチアップ
-        // 熱が溜まると静止摩擦から動摩擦への移行が早くなり高周波へシフトする
-        let baseSkidFreq = 600 + (maxSlip * 400) + (maxHeat * 600); // 600〜1600Hz
+        // 熱蓄積によるシフトに加えて、極限状態でさらに数千Hz跳ね上がる
+        let baseSkidFreq = 600 + (maxSlip * 400) + (maxHeat * 600) + (extremeSlipFactor * 2500); 
         skidOsc.frequency.setTargetAtTime(baseSkidFreq, audioCtx.currentTime, 0.1);
         
-        // 2. コンタクトパッチ変形と縦溝のパイプ共鳴 (500〜4500Hz)
+        // 2. コンタクトパッチ変形と縦溝のパイプ共鳴
         let resFreq = 500 + (maxSlip * 4000); 
         skidFilter.frequency.setTargetAtTime(resFreq, audioCtx.currentTime, 0.1);
-        skidFilter.Q.setTargetAtTime(1.5 + maxSlip * 2.5, audioCtx.currentTime, 0.1); 
+        
+        // 限界を大きく超えるとQ値が下がり、ノイズ感（ゴムがちぎれる悲鳴）が強調される
+        let targetQ = 1.5 + maxSlip * 2.5; 
+        targetQ = Math.max(0.5, targetQ - (extremeSlipFactor * 3.0)); 
+        skidFilter.Q.setTargetAtTime(targetQ, audioCtx.currentTime, 0.1); 
         
         // 3. マクロなビビり・チャタリング (LFO)
         // 車速に応じた引っかかり周期（20〜80Hz）
         let chatterFreq = Math.max(20, Math.min(80, speed * 2)); 
         skidLfo.frequency.setTargetAtTime(chatterFreq, audioCtx.currentTime, 0.1);
-        skidLfoGain.gain.setTargetAtTime(maxSlip * 0.7, audioCtx.currentTime, 0.1);
+        
+        // 極限状態でチャタリング（振動）の振幅を大きくして荒々しくする
+        let targetLfoGain = maxSlip * 0.7 + (extremeSlipFactor * 1.5);
+        skidLfoGain.gain.setTargetAtTime(targetLfoGain, audioCtx.currentTime, 0.1);
         
         skidGain.gain.setTargetAtTime(targetSkidGain, audioCtx.currentTime, 0.05);
     }
