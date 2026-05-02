@@ -60,6 +60,12 @@
         .course-btn:active { transform: scale(0.95); }
         .course-desc { font-size: 0.9rem; color: #ccc; margin-bottom: 15px; text-align: center; }
         
+        /* Facebookボタン用のスタイル */
+        .facebook-btn {
+            background: #1877F2; 
+            display: flex; justify-content: center; align-items: center; gap: 8px;
+        }
+
         .ranking-board {
             width: 100%; background: rgba(0,0,0,0.5); border-radius: 8px; padding: 10px; box-sizing: border-box;
             font-family: monospace; font-size: 0.9rem; color: #ddd;
@@ -87,7 +93,7 @@
         }
         #flash-message {
             position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%);
-            color: #FFD700; font-size: 3rem; font-weight: bold; font-style: italic;
+            color: #FFD700; font-weight: bold; font-style: italic;
             text-shadow: 2px 2px 5px black; opacity: 0; transition: opacity 0.3s, transform 0.3s;
             pointer-events: none; z-index: 20; width: 100%; text-align: center;
         }
@@ -111,6 +117,15 @@
             <button id="car-Retro_FR" class="car-btn" onclick="selectCar('Retro_FR')">
                 Retro_FR<br><span style="font-size: 0.8rem; font-weight: normal;">(FR / ドリフト志向)</span>
             </button>
+            
+            <!-- --- ABS実装追加 --- -->
+            <div style="margin-top: 15px; color: #ccc; font-size: 0.9rem;">
+                <label style="cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <input type="checkbox" id="abs-toggle" checked style="width: 18px; height: 18px;">
+                    <span>ABS (アンチロックブレーキシステム)</span>
+                </label>
+            </div>
+            <!-- ------------------- -->
         </div>
 
         <div class="courses-wrapper">
@@ -147,6 +162,14 @@
         <h2 style="font-size: 3rem; color: #FFD700; margin-bottom: 0;">GOAL!</h2>
         <div id="result-details"></div>
         <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px; width: 100%; max-width: 300px;">
+            
+            <!-- --- Facebookシェア機能追加 --- -->
+            <button class="course-btn facebook-btn" style="margin: 0;" onclick="shareOnFacebook()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                Facebookでシェア
+            </button>
+            <!-- ---------------------------- -->
+
             <button class="course-btn" style="background: #1E90FF; margin: 0;" onclick="startReplay()">リプレイを見る</button>
             <button class="course-btn" style="background: #666; margin: 0;" onclick="backToMenu()">メニューへ</button>
         </div>
@@ -199,6 +222,7 @@
     
     let selectedCarId = 'Modern_FF';
     let currentCar = null;
+    let absEnabled = true; // --- ABS状態フラグ ---
 
     window.selectCar = function(carId) {
         selectedCarId = carId;
@@ -268,10 +292,17 @@
     
     let tireHeat = [0, 0, 0, 0]; 
 
-    function showFlashMessage(text) {
+    // メッセージの改行・文字サイズ対応
+    function showFlashMessage(text, isLong = false) {
         let el = document.getElementById('flash-message');
-        el.innerText = text; el.style.opacity = 1; el.style.transform = "translate(-50%, -50%) scale(1.2)";
-        setTimeout(() => { el.style.opacity = 0; el.style.transform = "translate(-50%, -50%) scale(1.0)"; }, 1200);
+        el.innerHTML = text.replace(/\n/g, "<br>");
+        el.style.fontSize = isLong ? "1.5rem" : "3rem";
+        el.style.opacity = 1; 
+        el.style.transform = "translate(-50%, -50%) scale(1.2)";
+        setTimeout(() => { 
+            el.style.opacity = 0; 
+            el.style.transform = "translate(-50%, -50%) scale(1.0)"; 
+        }, isLong ? 3000 : 1200);
     }
 
     function createGate(x, y, width, yaw) {
@@ -599,14 +630,43 @@
         let alpha_rl =       - Math.atan2(v - car.lr * r, u_safe - car.T/2 * r);
         let alpha_rr =       - Math.atan2(v - car.lr * r, u_safe + car.T/2 * r);
 
-        let engineForce = accelInput * 4500; let brakeForce = brakeInput * 11000; 
+        let engineForce = accelInput * 4500; 
+        let brakeForce = brakeInput * 11000; 
         let Fx_fl = 0, Fx_fr = 0, Fx_rl = 0, Fx_rr = 0;
 
         if (car.driveType === 'FF') { Fx_fl = engineForce * 0.5; Fx_fr = engineForce * 0.5; } 
         else if (car.driveType === 'FR') { Fx_rl = engineForce * 0.5; Fx_rr = engineForce * 0.5; }
 
-        Fx_fl -= brakeForce * car.brakeBias * 0.5 * Math.sign(u); Fx_fr -= brakeForce * car.brakeBias * 0.5 * Math.sign(u);
-        Fx_rl -= brakeForce * (1 - car.brakeBias) * 0.5 * Math.sign(u); Fx_rr -= brakeForce * (1 - car.brakeBias) * 0.5 * Math.sign(u);
+        // 制動力の配分
+        let b_fl = brakeForce * car.brakeBias * 0.5;
+        let b_fr = brakeForce * car.brakeBias * 0.5;
+        let b_rl = brakeForce * (1 - car.brakeBias) * 0.5;
+        let b_rr = brakeForce * (1 - car.brakeBias) * 0.5;
+
+        // --- ABS実装追加 ---
+        if (absEnabled && brakeInput > 0 && Math.abs(u) > 2.0) {
+            let t_ms = performance.now();
+            // タイヤごとの制動力を監視し、ロックを防ぐためのポンピング関数
+            let applyABS = (bForce, Fz) => {
+                let maxBrake = car.mu * Fz * 0.95; // 限界グリップの95%をロック閾値とする
+                if (bForce > maxBrake) {
+                    // 約15Hzの周期(66ms)でブレーキ力を抜き、タイヤのロック（滑りっぱなし）を防ぐ
+                    let absPulse = (t_ms % 66) < 33; 
+                    return absPulse ? maxBrake : bForce * 0.3; 
+                }
+                return bForce;
+            };
+            b_fl = applyABS(b_fl, Fz_fl);
+            b_fr = applyABS(b_fr, Fz_fr);
+            b_rl = applyABS(b_rl, Fz_rl);
+            b_rr = applyABS(b_rr, Fz_rr);
+        }
+        // -------------------
+
+        Fx_fl -= b_fl * Math.sign(u); 
+        Fx_fr -= b_fr * Math.sign(u);
+        Fx_rl -= b_rl * Math.sign(u); 
+        Fx_rr -= b_rr * Math.sign(u);
 
         let drag = -0.5 * u * Math.abs(u) - 25 * u; Fx_rl += drag/2; Fx_rr += drag/2;
 
@@ -700,7 +760,7 @@
             if (p.life <= 0) {
                 particles.splice(i, 1);
             } else {
-                let alpha = p.life * 0.06; // 薄い煙
+                let alpha = p.life * 0.06;
                 ctx.fillStyle = `rgba(200, 200, 200, ${alpha})`;
                 ctx.beginPath(); 
                 ctx.arc(p.x * SCALE, p.y * SCALE, p.size * SCALE, 0, Math.PI * 2); 
@@ -958,6 +1018,9 @@
         prev_ax = 0; prev_ay = 0;
         inputSteer = 0; inputAccel = 0; inputBrake = 0; touchControl.active = false;
         
+        // ABSの状態を取得
+        absEnabled = document.getElementById('abs-toggle').checked;
+        
         currentLap = 0; nextGateIndex = 0; lapTimes = [];
         skidMarks = []; prevTirePos = [null, null, null, null]; particles = [];
         displayG = { x: 0, y: 0 }; tireSlips = [0, 0, 0, 0];
@@ -1012,6 +1075,39 @@
         document.getElementById('result-details').innerHTML = html;
         setTimeout(() => document.getElementById('result-layer').classList.remove('hidden'), 1500);
     }
+
+    // --- Facebookシェア機能追加 ---
+    window.shareOnFacebook = function() {
+        // キャンバスの画像をダウンロードする
+        const dataUrl = canvas.toDataURL("image/png");
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = `DrivingSimulator_Result_${currentCourse.name}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        // テキストをクリップボードにコピー
+        let total = lapTimes.reduce((acc, val) => acc + val, 0);
+        let text = `${currentCar.id}で${currentCourse.name}を${formatTime(total)}でクリア！\nhttps://yudai1966.github.io/drivingSimulator/`;
+        
+        let textArea = document.createElement("textarea");
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            showFlashMessage("コピー＆ダウンロード完了！\nFacebookにペースト(添付)して投稿してね！", true);
+        } catch (err) {
+            showFlashMessage("画像をダウンロードしました！\nFacebookで添付して投稿してね！", true);
+        }
+        document.body.removeChild(textArea);
+
+        setTimeout(() => {
+            window.open("https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent("https://yudai1966.github.io/drivingSimulator/"), "_blank");
+        }, 1500);
+    };
+    // ----------------------------
 
     window.startReplay = function() {
         if (!currentRunData || currentRunData.length === 0) return;
