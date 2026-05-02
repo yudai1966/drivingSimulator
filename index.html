@@ -7,22 +7,43 @@
     <style>
         body {
             margin: 0; padding: 0; overflow: hidden;
-            background-color: #228B22; /* コース外は緑色 */
+            background-color: #228B22;
             touch-action: none; user-select: none;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         canvas {
             display: block; width: 100vw; height: 100vh;
         }
-        /* オーバーレイUI (メニュー、リザルト) */
         .overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8);
+            background: rgba(0,0,0,0.85);
             display: flex; flex-direction: column; justify-content: center; align-items: center;
             color: white; z-index: 30;
+            overflow-y: auto; padding: 20px; box-sizing: border-box;
         }
         .hidden { display: none !important; }
-        h1, h2 { margin-bottom: 20px; text-shadow: 2px 2px 4px black; }
+        h1, h2 { margin-bottom: 20px; text-shadow: 2px 2px 4px black; text-align: center; }
+        
+        /* 車種選択UI */
+        .car-selection {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px 20px; border-radius: 12px;
+            margin-bottom: 25px; text-align: center;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+        .car-selection h3 { margin: 0 0 15px 0; font-size: 1.2rem; color: #FFD700; }
+        .car-btn {
+            padding: 12px 20px; margin: 5px; font-size: 1rem; font-weight: bold;
+            background: #444; color: #ccc; border: 2px solid #666; border-radius: 8px;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .car-btn.active-car {
+            background: #1E90FF; color: white; border-color: #FFF;
+            box-shadow: 0 0 15px rgba(30, 144, 255, 0.8);
+            transform: scale(1.05);
+        }
+
+        /* コース選択UI */
         .course-btn {
             padding: 15px 40px; margin: 10px; font-size: 1.2rem; font-weight: bold;
             background: linear-gradient(135deg, #FF6347, #FF4500);
@@ -30,7 +51,7 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.1s;
         }
         .course-btn:active { transform: scale(0.95); }
-        .course-desc { font-size: 0.9rem; color: #ccc; margin-bottom: 10px; }
+        .course-desc { font-size: 0.9rem; color: #ccc; margin-bottom: 15px; text-align: center; }
         
         /* ゲーム中HUD */
         #ui-layer {
@@ -49,14 +70,25 @@
             text-shadow: 2px 2px 5px black; opacity: 0; transition: opacity 0.3s, transform 0.3s;
             pointer-events: none; z-index: 20;
         }
-        #result-details { margin: 20px 0; font-size: 1.2rem; font-family: monospace; text-align: left; }
+        #result-details { margin: 20px 0; font-size: 1.2rem; font-family: monospace; text-align: center; }
     </style>
 </head>
 <body>
     <!-- メニュー画面 -->
     <div id="menu-layer" class="overlay">
         <h1>TIME ATTACK</h1>
-        <p style="margin-bottom: 30px;">コースを選択してスタート（音声が出ます）</p>
+        
+        <div class="car-selection">
+            <h3>SELECT MACHINE</h3>
+            <button id="car-ZWE211" class="car-btn active-car" onclick="selectCar('ZWE211')">
+                ZWE211<br><span style="font-size: 0.8rem; font-weight: normal;">(FF / グリップ安定)</span>
+            </button>
+            <button id="car-AE86" class="car-btn" onclick="selectCar('AE86')">
+                AE86<br><span style="font-size: 0.8rem; font-weight: normal;">(FR / ドリフト志向)</span>
+            </button>
+        </div>
+
+        <p style="margin-bottom: 20px;">コースを選択してスタート（音声が出ます）</p>
         <button class="course-btn" onclick="startGame('oval')">オーバル</button>
         <div class="course-desc">高速な楕円コース (3 Laps)</div>
         <button class="course-btn" onclick="startGame('figure8')">8の字</button>
@@ -100,6 +132,31 @@
     resize();
 
     // ==========================================
+    // 車両データ定義
+    // ==========================================
+    const carsData = {
+        ZWE211: {
+            id: 'ZWE211', mass: 1350, Iz: 1900, lf: 1.1, lr: 1.5,
+            C_alpha_f: 65000, C_alpha_r: 90000, mu: 1.0,
+            driveType: 'FF', brakeBias: 0.7, T: 1.53, h: 0.5
+        },
+        AE86: {
+            id: 'AE86', mass: 950, Iz: 1200, lf: 1.2, lr: 1.2,
+            C_alpha_f: 45000, C_alpha_r: 45000, mu: 0.8,
+            driveType: 'FR', brakeBias: 0.6, T: 1.53, h: 0.5
+        }
+    };
+    
+    let selectedCarId = 'ZWE211'; // デフォルト
+    let currentCar = null;
+
+    window.selectCar = function(carId) {
+        selectedCarId = carId;
+        document.querySelectorAll('.car-btn').forEach(btn => btn.classList.remove('active-car'));
+        document.getElementById('car-' + carId).classList.add('active-car');
+    };
+
+    // ==========================================
     // レース管理システム
     // ==========================================
     let raceState = 'MENU';
@@ -110,6 +167,7 @@
     let lapTimes = [];
     let prevCarPos = {x: 0, y: 0};
     const SCALE = 12; // 1メートル = 12ピクセル
+    const g = 9.81;
 
     function formatTime(ms) {
         if (!ms || ms < 0) return "00:00.000";
@@ -152,41 +210,28 @@
         
         if (curbPaths && curbPaths.length > 0) {
             ctx.lineCap = 'butt'; 
-            
             ctx.lineWidth = width + curbWidth * 2;
             ctx.strokeStyle = '#D32F2F'; 
-            curbPaths.forEach(fn => {
-                ctx.beginPath(); fn(ctx); ctx.stroke();
-            });
+            curbPaths.forEach(fn => { ctx.beginPath(); fn(ctx); ctx.stroke(); });
 
             ctx.strokeStyle = '#FFFFFF';
             ctx.setLineDash([4 * SCALE, 4 * SCALE]); 
-            curbPaths.forEach(fn => {
-                ctx.beginPath(); fn(ctx); ctx.stroke();
-            });
+            curbPaths.forEach(fn => { ctx.beginPath(); fn(ctx); ctx.stroke(); });
             ctx.setLineDash([]);
         }
 
         ctx.lineCap = originalLineCap;
         ctx.lineWidth = width;
         ctx.strokeStyle = '#808080';
-        roadPaths.forEach(fn => {
-            ctx.beginPath(); fn(ctx); ctx.stroke();
-        });
+        roadPaths.forEach(fn => { ctx.beginPath(); fn(ctx); ctx.stroke(); });
     }
 
     function drawStartLine(ctx, x, y, width, yaw=0) {
         ctx.save();
-        ctx.translate(x * SCALE, y * SCALE);
-        ctx.rotate(yaw);
+        ctx.translate(x * SCALE, y * SCALE); ctx.rotate(yaw);
+        ctx.beginPath(); ctx.rect(-1.5 * SCALE, -width/2 * SCALE, 3 * SCALE, width * SCALE); ctx.clip(); 
 
-        ctx.beginPath();
-        ctx.rect(-1.5 * SCALE, -width/2 * SCALE, 3 * SCALE, width * SCALE);
-        ctx.clip(); 
-
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(-1.5 * SCALE, -width/2 * SCALE, 3 * SCALE, width * SCALE);
-        
+        ctx.fillStyle = '#FFFFFF'; ctx.fillRect(-1.5 * SCALE, -width/2 * SCALE, 3 * SCALE, width * SCALE);
         ctx.fillStyle = '#000000';
         for(let i = -Math.floor(width/2) - 3; i <= Math.ceil(width/2) + 3; i += 1.5) {
             if(Math.abs(Math.round(i / 1.5) % 2) === 1) {
@@ -202,54 +247,28 @@
     // ==========================================
     const courses = {
         oval: {
-            name: 'オーバル', laps: 3,
-            startState: [-5, -30, 0, 0, 0, 0], 
+            name: 'オーバル', laps: 3, startState: [-5, -30, 0, 0, 0, 0], 
             draw: (ctx) => {
-                ctx.lineCap = 'butt';
-                ctx.lineJoin = 'round';
-                
+                ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
                 const curbPaths = [
-                    (c) => {
-                        c.moveTo(-30 * SCALE, 30 * SCALE);
-                        c.lineTo(-50 * SCALE, 30 * SCALE);
-                        c.arc(-50 * SCALE, 0, 30 * SCALE, Math.PI/2, Math.PI*1.5);
-                        c.lineTo(-30 * SCALE, -30 * SCALE);
-                    },
-                    (c) => {
-                        c.moveTo(30 * SCALE, -30 * SCALE);
-                        c.lineTo(50 * SCALE, -30 * SCALE);
-                        c.arc(50 * SCALE, 0, 30 * SCALE, -Math.PI/2, Math.PI/2);
-                        c.lineTo(30 * SCALE, 30 * SCALE);
-                    }
+                    (c) => { c.moveTo(-30 * SCALE, 30 * SCALE); c.lineTo(-50 * SCALE, 30 * SCALE); c.arc(-50 * SCALE, 0, 30 * SCALE, Math.PI/2, Math.PI*1.5); c.lineTo(-30 * SCALE, -30 * SCALE); },
+                    (c) => { c.moveTo(30 * SCALE, -30 * SCALE); c.lineTo(50 * SCALE, -30 * SCALE); c.arc(50 * SCALE, 0, 30 * SCALE, -Math.PI/2, Math.PI/2); c.lineTo(30 * SCALE, 30 * SCALE); }
                 ];
                 const roadPaths = [
-                    (c) => {
-                        c.arc(-50 * SCALE, 0, 30 * SCALE, Math.PI/2, Math.PI*1.5);
-                        c.lineTo(50 * SCALE, -30 * SCALE);
-                        c.arc(50 * SCALE, 0, 30 * SCALE, -Math.PI/2, Math.PI/2);
-                        c.closePath();
-                    }
+                    (c) => { c.arc(-50 * SCALE, 0, 30 * SCALE, Math.PI/2, Math.PI*1.5); c.lineTo(50 * SCALE, -30 * SCALE); c.arc(50 * SCALE, 0, 30 * SCALE, -Math.PI/2, Math.PI/2); c.closePath(); }
                 ];
                 drawTrackWithCurbs(ctx, 12 * SCALE, curbPaths, roadPaths);
                 drawStartLine(ctx, 0, -30, 12, 0);
             },
             gates: [
-                createGate(0, -30, 16, 0),
-                createGate(50, -30, 20, 0),
-                createGate(80, 0, 20, Math.PI/2),
-                createGate(50, 30, 20, Math.PI),
-                createGate(0, 30, 20, Math.PI),
-                createGate(-50, 30, 20, Math.PI),
-                createGate(-80, 0, 20, -Math.PI/2),
-                createGate(-50, -30, 20, 0)
+                createGate(0, -30, 16, 0), createGate(50, -30, 20, 0), createGate(80, 0, 20, Math.PI/2), createGate(50, 30, 20, Math.PI),
+                createGate(0, 30, 20, Math.PI), createGate(-50, 30, 20, Math.PI), createGate(-80, 0, 20, -Math.PI/2), createGate(-50, -30, 20, 0)
             ]
         },
         figure8: {
-            name: '8の字', laps: 2,
-            startState: [-38, 33, 0, 0, 0, 0],
+            name: '8の字', laps: 2, startState: [-38, 33, 0, 0, 0, 0],
             draw: (ctx) => {
                 ctx.lineCap = 'butt';
-                
                 const curbPaths = [
                     (c) => { c.arc(-33 * SCALE, 0, 33 * SCALE, Math.PI/4, Math.PI * 1.75); },
                     (c) => { c.arc(33 * SCALE, 0, 33 * SCALE, -Math.PI*0.75, Math.PI * 0.75); }
@@ -262,74 +281,29 @@
                 drawStartLine(ctx, -33, 33, 10, 0);
             },
             gates: [
-                createGate(-33, 33, 20, 0),
-                createGate(0, 0, 25, -Math.PI/4),
-                createGate(33, -33, 20, 0),
-                createGate(66, 0, 20, Math.PI/2),
-                createGate(33, 33, 20, Math.PI),
-                createGate(0, 0, 25, -Math.PI*3/4),
-                createGate(-33, -33, 20, Math.PI),
-                createGate(-66, 0, 20, Math.PI/2)
+                createGate(-33, 33, 20, 0), createGate(0, 0, 25, -Math.PI/4), createGate(33, -33, 20, 0), createGate(66, 0, 20, Math.PI/2),
+                createGate(33, 33, 20, Math.PI), createGate(0, 0, 25, -Math.PI*3/4), createGate(-33, -33, 20, Math.PI), createGate(-66, 0, 20, Math.PI/2)
             ]
         },
         technical: {
-            name: 'テクニカル', laps: 2,
-            startState: [5, 40, Math.PI, 0, 0, 0],
+            name: 'テクニカル', laps: 2, startState: [5, 40, Math.PI, 0, 0, 0],
             draw: (ctx) => {
-                ctx.lineJoin = 'round'; 
-                ctx.lineCap = 'round'; 
-                
+                ctx.lineJoin = 'round'; ctx.lineCap = 'round'; 
                 const curbPaths = [
-                    (c) => { // 左ヘアピン
-                        c.moveTo(-20 * SCALE, 40 * SCALE);
-                        c.lineTo(-40 * SCALE, 40 * SCALE);
-                        c.arc(-40 * SCALE, 20 * SCALE, 20 * SCALE, Math.PI/2, Math.PI*1.5);
-                        c.lineTo(-40 * SCALE, -10 * SCALE);
-                    },
-                    (c) => { // クランク
-                        c.moveTo(-35 * SCALE, -20 * SCALE);
-                        c.lineTo(-20 * SCALE, -20 * SCALE); 
-                        c.lineTo(-20 * SCALE, -40 * SCALE);
-                        c.lineTo(-5 * SCALE, -40 * SCALE);
-                    },
-                    (c) => { // 右ヘアピン〜S字
-                        c.moveTo(25 * SCALE, -40 * SCALE);
-                        c.lineTo(40 * SCALE, -40 * SCALE);
-                        c.arc(40 * SCALE, -20 * SCALE, 20 * SCALE, -Math.PI/2, Math.PI/2);
-                        c.bezierCurveTo(0, 0, 40 * SCALE, 40 * SCALE, 20 * SCALE, 40 * SCALE);
-                        c.lineTo(10 * SCALE, 40 * SCALE);
-                    }
+                    (c) => { c.moveTo(-20 * SCALE, 40 * SCALE); c.lineTo(-40 * SCALE, 40 * SCALE); c.arc(-40 * SCALE, 20 * SCALE, 20 * SCALE, Math.PI/2, Math.PI*1.5); c.lineTo(-40 * SCALE, -10 * SCALE); },
+                    (c) => { c.moveTo(-35 * SCALE, -20 * SCALE); c.lineTo(-20 * SCALE, -20 * SCALE); c.lineTo(-20 * SCALE, -40 * SCALE); c.lineTo(-5 * SCALE, -40 * SCALE); },
+                    (c) => { c.moveTo(25 * SCALE, -40 * SCALE); c.lineTo(40 * SCALE, -40 * SCALE); c.arc(40 * SCALE, -20 * SCALE, 20 * SCALE, -Math.PI/2, Math.PI/2); c.bezierCurveTo(0, 0, 40 * SCALE, 40 * SCALE, 20 * SCALE, 40 * SCALE); c.lineTo(10 * SCALE, 40 * SCALE); }
                 ];
                 const roadPaths = [
-                    (c) => {
-                        c.moveTo(20 * SCALE, 40 * SCALE);
-                        c.lineTo(-40 * SCALE, 40 * SCALE);
-                        c.arc(-40 * SCALE, 20 * SCALE, 20 * SCALE, Math.PI/2, Math.PI*1.5);
-                        c.lineTo(-40 * SCALE, -20 * SCALE);
-                        c.lineTo(-20 * SCALE, -20 * SCALE); 
-                        c.lineTo(-20 * SCALE, -40 * SCALE);
-                        c.lineTo(40 * SCALE, -40 * SCALE);
-                        c.arc(40 * SCALE, -20 * SCALE, 20 * SCALE, -Math.PI/2, Math.PI/2);
-                        c.bezierCurveTo(0, 0, 40 * SCALE, 40 * SCALE, 20 * SCALE, 40 * SCALE);
-                    }
+                    (c) => { c.moveTo(20 * SCALE, 40 * SCALE); c.lineTo(-40 * SCALE, 40 * SCALE); c.arc(-40 * SCALE, 20 * SCALE, 20 * SCALE, Math.PI/2, Math.PI*1.5); c.lineTo(-40 * SCALE, -20 * SCALE); c.lineTo(-20 * SCALE, -20 * SCALE); c.lineTo(-20 * SCALE, -40 * SCALE); c.lineTo(40 * SCALE, -40 * SCALE); c.arc(40 * SCALE, -20 * SCALE, 20 * SCALE, -Math.PI/2, Math.PI/2); c.bezierCurveTo(0, 0, 40 * SCALE, 40 * SCALE, 20 * SCALE, 40 * SCALE); }
                 ];
                 drawTrackWithCurbs(ctx, 10 * SCALE, curbPaths, roadPaths);
                 drawStartLine(ctx, 0, 40, 10, Math.PI);
             },
             gates: [
-                createGate(0, 40, 20, Math.PI),
-                createGate(-40, 40, 20, Math.PI),
-                createGate(-60, 20, 20, -Math.PI/2),
-                createGate(-40, 0, 20, 0),
-                createGate(-40, -20, 20, -Math.PI/2),
-                createGate(-20, -20, 20, 0),
-                createGate(-20, -40, 20, -Math.PI/2),
-                createGate(10, -40, 20, 0),
-                createGate(40, -40, 20, 0),
-                createGate(60, -20, 20, Math.PI/2),
-                createGate(40, 0, 20, Math.PI),
-                createGate(20, 20, 25, Math.PI/2),
-                createGate(20, 40, 20, Math.PI)
+                createGate(0, 40, 20, Math.PI), createGate(-40, 40, 20, Math.PI), createGate(-60, 20, 20, -Math.PI/2), createGate(-40, 0, 20, 0),
+                createGate(-40, -20, 20, -Math.PI/2), createGate(-20, -20, 20, 0), createGate(-20, -40, 20, -Math.PI/2), createGate(10, -40, 20, 0),
+                createGate(40, -40, 20, 0), createGate(60, -20, 20, Math.PI/2), createGate(40, 0, 20, Math.PI), createGate(20, 20, 25, Math.PI/2), createGate(20, 40, 20, Math.PI)
             ]
         }
     };
@@ -426,9 +400,7 @@
         }
     }
     function handlePointerUp(e) {
-        if (touchControl.active && e.pointerId === touchControl.id) {
-            touchControl.active = false;
-        }
+        if (touchControl.active && e.pointerId === touchControl.id) { touchControl.active = false; }
     }
     canvas.addEventListener('pointerdown', handlePointerDown);
     canvas.addEventListener('pointermove', handlePointerMove);
@@ -438,8 +410,6 @@
     // ==========================================
     // 物理シミュレーション (車両モデル)
     // ==========================================
-    const mass = 1350, Iz = 1900, lf = 1.1, lr = 1.5, L = lf + lr, T = 1.53, h = 0.5, mu = 1.0;
-    const C_alpha_f = 60000, C_alpha_r = 85000, g = 9.81;
     let state = [0, 0, 0, 0.1, 0, 0];
     let prev_ax = 0, prev_ay = 0, loads = [0, 0, 0, 0];
 
@@ -448,49 +418,73 @@
         let u_safe = Math.max(Math.abs(u), 0.5) * Math.sign(u);
         if (Math.abs(u) < 0.1) u_safe = 0.1;
 
-        let Fz_static_f = mass * g * lr / L / 2, Fz_static_r = mass * g * lf / L / 2;
-        let dFz_pitch = mass * current_ax * h / L / 2;
-        let dFz_roll_f = mass * current_ay * h / T * 0.6, dFz_roll_r = mass * current_ay * h / T * 0.4;
+        const car = currentCar; // 選択された車種
+        const L = car.lf + car.lr;
+
+        // 荷重移動計算
+        let Fz_static_f = car.mass * g * car.lr / L / 2;
+        let Fz_static_r = car.mass * g * car.lf / L / 2;
+        let dFz_pitch = car.mass * current_ax * car.h / L / 2;
+        let dFz_roll_f = car.mass * current_ay * car.h / car.T * 0.6; // ロール剛性前より
+        let dFz_roll_r = car.mass * current_ay * car.h / car.T * 0.4;
         let Fz_fl = Math.max(0.1, Fz_static_f - dFz_pitch + dFz_roll_f);
         let Fz_fr = Math.max(0.1, Fz_static_f - dFz_pitch - dFz_roll_f);
         let Fz_rl = Math.max(0.1, Fz_static_r + dFz_pitch + dFz_roll_r);
         let Fz_rr = Math.max(0.1, Fz_static_r + dFz_pitch - dFz_roll_r);
         loads = [Fz_fl, Fz_fr, Fz_rl, Fz_rr];
 
+        // スリップ角計算
         let delta = steerInput * (Math.PI / 5);
-        let alpha_fl = delta - Math.atan2(v + lf * r, u_safe - T/2 * r);
-        let alpha_fr = delta - Math.atan2(v + lf * r, u_safe + T/2 * r);
-        let alpha_rl =       - Math.atan2(v - lr * r, u_safe - T/2 * r);
-        let alpha_rr =       - Math.atan2(v - lr * r, u_safe + T/2 * r);
+        let alpha_fl = delta - Math.atan2(v + car.lf * r, u_safe - car.T/2 * r);
+        let alpha_fr = delta - Math.atan2(v + car.lf * r, u_safe + car.T/2 * r);
+        let alpha_rl =       - Math.atan2(v - car.lr * r, u_safe - car.T/2 * r);
+        let alpha_rr =       - Math.atan2(v - car.lr * r, u_safe + car.T/2 * r);
 
-        let engineForce = accelInput * 4500, brakeForce = brakeInput * 11000; 
-        let Fx_fl = engineForce * 0.5 - brakeForce * 0.35 * Math.sign(u);
-        let Fx_fr = engineForce * 0.5 - brakeForce * 0.35 * Math.sign(u);
-        let Fx_rl = - brakeForce * 0.15 * Math.sign(u);
-        let Fx_rr = - brakeForce * 0.15 * Math.sign(u);
+        // 駆動力・制動力計算
+        let engineForce = accelInput * 4500; 
+        let brakeForce = brakeInput * 11000; 
+        let Fx_fl = 0, Fx_fr = 0, Fx_rl = 0, Fx_rr = 0;
+
+        // 駆動方式に基づくトラクション配分
+        if (car.driveType === 'FF') {
+            Fx_fl = engineForce * 0.5;
+            Fx_fr = engineForce * 0.5;
+        } else if (car.driveType === 'FR') {
+            Fx_rl = engineForce * 0.5;
+            Fx_rr = engineForce * 0.5;
+        }
+
+        // ブレーキバイアスに基づく制動力配分
+        Fx_fl -= brakeForce * car.brakeBias * 0.5 * Math.sign(u);
+        Fx_fr -= brakeForce * car.brakeBias * 0.5 * Math.sign(u);
+        Fx_rl -= brakeForce * (1 - car.brakeBias) * 0.5 * Math.sign(u);
+        Fx_rr -= brakeForce * (1 - car.brakeBias) * 0.5 * Math.sign(u);
+
+        // 空気抵抗
         let drag = -0.5 * u * Math.abs(u) - 25 * u;
         Fx_rl += drag/2; Fx_rr += drag/2;
 
+        // タイヤ横力計算
         function getTireForceY(alpha, Fz, Fx, C_alpha_param) {
-            let max_F = mu * Fz;
+            let max_F = car.mu * Fz;
             let available_Fy = Math.sqrt(Math.max(0, max_F**2 - Fx**2));
-            let Fy = C_alpha_param * alpha * (Fz / (mass * g / 4));
+            let Fy = C_alpha_param * alpha * (Fz / (car.mass * g / 4));
             if (Math.abs(u) < 2.0) Fy *= Math.abs(u) / 2.0;
             return Math.max(-available_Fy, Math.min(available_Fy, Fy));
         }
 
-        let Fy_fl = getTireForceY(alpha_fl, Fz_fl, Fx_fl, C_alpha_f);
-        let Fy_fr = getTireForceY(alpha_fr, Fz_fr, Fx_fr, C_alpha_f);
-        let Fy_rl = getTireForceY(alpha_rl, Fz_rl, Fx_rl, C_alpha_r);
-        let Fy_rr = getTireForceY(alpha_rr, Fz_rr, Fx_rr, C_alpha_r);
+        let Fy_fl = getTireForceY(alpha_fl, Fz_fl, Fx_fl, car.C_alpha_f);
+        let Fy_fr = getTireForceY(alpha_fr, Fz_fr, Fx_fr, car.C_alpha_f);
+        let Fy_rl = getTireForceY(alpha_rl, Fz_rl, Fx_rl, car.C_alpha_r);
+        let Fy_rr = getTireForceY(alpha_rr, Fz_rr, Fx_rr, car.C_alpha_r);
 
         let sumFx = Fx_fl * Math.cos(delta) - Fy_fl * Math.sin(delta) + Fx_fr * Math.cos(delta) - Fy_fr * Math.sin(delta) + Fx_rl + Fx_rr;
         let sumFy = Fx_fl * Math.sin(delta) + Fy_fl * Math.cos(delta) + Fx_fr * Math.sin(delta) + Fy_fr * Math.cos(delta) + Fy_rl + Fy_rr;
-        let sumMz = lf * ( (Fx_fl * Math.sin(delta) + Fy_fl * Math.cos(delta)) + (Fx_fr * Math.sin(delta) + Fy_fr * Math.cos(delta)) )
-                  - lr * (Fy_rl + Fy_rr)
-                  + (T/2) * ( -(Fx_fl * Math.cos(delta) - Fy_fl * Math.sin(delta)) + (Fx_fr * Math.cos(delta) - Fy_fr * Math.sin(delta)) - Fx_rl + Fx_rr );
+        let sumMz = car.lf * ( (Fx_fl * Math.sin(delta) + Fy_fl * Math.cos(delta)) + (Fx_fr * Math.sin(delta) + Fy_fr * Math.cos(delta)) )
+                  - car.lr * (Fy_rl + Fy_rr)
+                  + (car.T/2) * ( -(Fx_fl * Math.cos(delta) - Fy_fl * Math.sin(delta)) + (Fx_fr * Math.cos(delta) - Fy_fr * Math.sin(delta)) - Fx_rl + Fx_rr );
 
-        let du = sumFx / mass + v * r, dv = sumFy / mass - u * r, dr = sumMz / Iz;
+        let du = sumFx / car.mass + v * r, dv = sumFy / car.mass - u * r, dr = sumMz / car.Iz;
         let dx = u * Math.cos(yaw) - v * Math.sin(yaw), dy = u * Math.sin(yaw) + v * Math.cos(yaw), dyaw = r;
 
         if (Math.abs(u) < 1.0 && accelInput === 0 && brakeInput === 0) { dv -= v * 10; dr -= r * 10; du -= u * 2; }
@@ -556,11 +550,29 @@
     let carDisplayX = 0, carDisplayY = 0;
 
     function drawCarFixed() {
-        const carW = 1.8 * SCALE, carL = 4.3 * SCALE, tireW = 0.4 * SCALE, tireL = 0.8 * SCALE;
-        ctx.fillStyle = '#F5F5F5'; ctx.fillRect(-lr * SCALE, -carW/2, carL, carW);
-        ctx.fillStyle = '#222222'; ctx.fillRect(0.3 * SCALE, -carW/2 + 2, 0.8 * SCALE, carW - 4);
-        ctx.strokeStyle = '#CCCCCC'; ctx.lineWidth = 1; ctx.strokeRect(-lr * SCALE, -carW/2, carL, carW);
+        if (!currentCar) return;
+        const { lf, lr, T, mass, id } = currentCar;
 
+        const carW = 1.8 * SCALE;
+        const frontOverhang = 0.9 * SCALE;
+        const rearOverhang = 0.9 * SCALE;
+        const carL = (lf + lr) * SCALE + frontOverhang + rearOverhang;
+        const carRearX = -lr * SCALE - rearOverhang;
+
+        // 車体のベース（AE86はパンダカラー風に白、ZWE211は少しグレーがかった白）
+        ctx.fillStyle = id === 'AE86' ? '#FFFFFF' : '#F5F5F5'; 
+        ctx.fillRect(carRearX, -carW/2, carL, carW);
+        
+        if (id === 'AE86') {
+            ctx.fillStyle = '#222';
+            ctx.fillRect(carRearX, -carW/2, carL, 2);
+            ctx.fillRect(carRearX, carW/2 - 2, carL, 2);
+        }
+
+        ctx.fillStyle = '#222222'; ctx.fillRect(0.2 * SCALE, -carW/2 + 2, 0.9 * SCALE, carW - 4); // キャビン
+        ctx.strokeStyle = '#CCCCCC'; ctx.lineWidth = 1; ctx.strokeRect(carRearX, -carW/2, carL, carW);
+
+        const tireW = 0.4 * SCALE, tireL = 0.8 * SCALE;
         const drawTire = (oX, oY, stA, load) => {
             ctx.save(); ctx.translate(oX * SCALE, oY * SCALE); ctx.rotate(stA);
             let alpha = Math.max(0.2, Math.min(1.0, (load / (mass * g / 4)) * 0.8));
@@ -576,35 +588,23 @@
 
     function drawNavigationArrow() {
         if (raceState !== 'RACING' || !currentCourse) return;
-        
         let gate = currentCourse.gates[nextGateIndex];
-        let dx = gate.cx - state[0];
-        let dy = gate.cy - state[1];
+        let dx = gate.cx - state[0]; let dy = gate.cy - state[1];
         let dist = Math.hypot(dx, dy);
 
         if (dist < 30) {
             let nextTargetIndex = (nextGateIndex + 1) % currentCourse.gates.length;
             let nextGate = currentCourse.gates[nextTargetIndex];
-            dx = nextGate.cx - state[0];
-            dy = nextGate.cy - state[1];
+            dx = nextGate.cx - state[0]; dy = nextGate.cy - state[1];
         }
-        
         let relAngle = Math.atan2(dy, dx) - state[2];
         
-        ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.translate(carDisplayX, carDisplayY);
-        ctx.rotate(relAngle);
-        ctx.translate(0, -120);
+        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.translate(carDisplayX, carDisplayY); ctx.rotate(relAngle); ctx.translate(0, -120);
         
-        ctx.fillStyle = `rgba(255, 215, 0, 0.8)`;
-        ctx.beginPath(); 
-        ctx.moveTo(0, -15);
-        ctx.lineTo(12, 12); 
-        ctx.lineTo(-12, 12); 
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = `rgba(0,0,0,0.5)`; ctx.lineWidth=2; ctx.stroke();
+        ctx.fillStyle = `rgba(255, 215, 0, 0.8)`; ctx.beginPath(); 
+        ctx.moveTo(0, -15); ctx.lineTo(12, 12); ctx.lineTo(-12, 12); ctx.closePath();
+        ctx.fill(); ctx.strokeStyle = `rgba(0,0,0,0.5)`; ctx.lineWidth=2; ctx.stroke();
         ctx.restore();
     }
 
@@ -640,6 +640,9 @@
         if (!isAudioInitialized) initAudio();
         else if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
         
+        // 選択された車種をセット
+        currentCar = carsData[selectedCarId];
+        
         currentCourse = courses[courseId];
         state = [...currentCourse.startState];
         prev_ax = 0; prev_ay = 0;
@@ -670,7 +673,7 @@
     }
 
     window.backToMenu = function() {
-        raceState = 'MENU'; currentCourse = null;
+        raceState = 'MENU'; currentCourse = null; currentCar = null;
         document.getElementById('result-layer').classList.add('hidden');
         document.getElementById('menu-layer').classList.remove('hidden');
     }
@@ -689,7 +692,6 @@
         
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // ★車の位置を操作UIの中心と一致させる
         const uiCenter = getUICenter();
         carDisplayX = uiCenter.x; 
         carDisplayY = uiCenter.y;
@@ -715,7 +717,6 @@
         requestAnimationFrame(loop);
     }
     
-    // 初期起動
     requestAnimationFrame(loop);
 </script>
 </body>
