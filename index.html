@@ -24,7 +24,6 @@
         .hidden { display: none !important; }
         h1, h2 { margin-bottom: 20px; text-shadow: 2px 2px 4px black; text-align: center; margin-top: 0; }
         
-        /* 車種選択UI */
         .car-selection {
             background: rgba(255, 255, 255, 0.1);
             padding: 15px 20px; border-radius: 12px; width: 100%; max-width: 400px;
@@ -43,7 +42,6 @@
             transform: scale(1.05);
         }
 
-        /* コース選択＆ランキング UI */
         .courses-wrapper {
             display: flex; flex-direction: column; width: 100%; max-width: 400px; gap: 20px;
         }
@@ -72,7 +70,6 @@
         .rank-2 { color: #C0C0C0; font-weight: bold; }
         .rank-3 { color: #cd7f32; font-weight: bold; }
         
-        /* ゲーム中HUD */
         #ui-layer {
             position: absolute; top: 10px; left: 10px;
             color: white; text-shadow: 1px 1px 2px black;
@@ -98,7 +95,6 @@
     </style>
 </head>
 <body>
-    <!-- メニュー画面 -->
     <div id="menu-layer" class="overlay">
         <h1>TIME ATTACK</h1>
         
@@ -116,34 +112,22 @@
             <div class="course-card">
                 <button class="course-btn" onclick="startGame('oval')">オーバル</button>
                 <div class="course-desc">高速な楕円コース (3 Laps)</div>
-                <div class="ranking-board">
-                    <div class="ranking-title">TOP 5 RANKING</div>
-                    <div id="ranking-oval">Loading...</div>
-                </div>
+                <div class="ranking-board"><div class="ranking-title">TOP 5 RANKING</div><div id="ranking-oval">Loading...</div></div>
             </div>
-            
             <div class="course-card">
                 <button class="course-btn" onclick="startGame('figure8')">8の字</button>
                 <div class="course-desc">左右の荷重移動の練習に (2 Laps)</div>
-                <div class="ranking-board">
-                    <div class="ranking-title">TOP 5 RANKING</div>
-                    <div id="ranking-figure8">Loading...</div>
-                </div>
+                <div class="ranking-board"><div class="ranking-title">TOP 5 RANKING</div><div id="ranking-figure8">Loading...</div></div>
             </div>
-
             <div class="course-card">
                 <button class="course-btn" onclick="startGame('technical')">テクニカル</button>
                 <div class="course-desc">複合コーナーとヘアピン (2 Laps)</div>
-                <div class="ranking-board">
-                    <div class="ranking-title">TOP 5 RANKING</div>
-                    <div id="ranking-technical">Loading...</div>
-                </div>
+                <div class="ranking-board"><div class="ranking-title">TOP 5 RANKING</div><div id="ranking-technical">Loading...</div></div>
             </div>
         </div>
         <p style="margin-top: 20px; font-size: 0.8rem; color: #888;">※各コースの自己ベストはゴーストとして出現します</p>
     </div>
 
-    <!-- リザルト画面 -->
     <div id="result-layer" class="overlay hidden" style="justify-content: center;">
         <h2 style="font-size: 3rem; color: #FFD700; margin-bottom: 0;">GOAL!</h2>
         <div id="result-details"></div>
@@ -153,7 +137,6 @@
         </div>
     </div>
 
-    <!-- リプレイ中のUI -->
     <div id="replay-ui" class="overlay hidden" style="background: transparent; pointer-events: none; justify-content: flex-end;">
         <div style="width: 100%; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); position: absolute; top: 0; left: 0; padding: 20px; box-sizing: border-box;">
             <span style="font-family: monospace; font-size: 1.5rem; color: white;">REPLAY MODE</span>
@@ -161,12 +144,10 @@
         <button class="course-btn" style="margin-bottom: 40px; background: rgba(80,80,80,0.9); pointer-events: auto; width: 250px; border: 2px solid #aaa;" onclick="endReplay()">リザルトへ戻る</button>
     </div>
 
-    <!-- ゲーム中UI -->
     <div id="ui-layer" class="hidden">
         <div style="font-size: 1.2rem;">速度: <span id="speed-disp">0</span> km/h</div>
         <div style="font-size: 0.8rem; margin-top: 5px; color: #ddd;">
-            【操作】車を中心に指をスライド<br>
-            ・左右：ハンドル<br>・上：アクセル / 下：ブレーキ
+            【操作】車を中心に指をスライド<br>・左右：ハンドル<br>・上：アクセル / 下：ブレーキ
         </div>
     </div>
     <div id="hud-layer" class="hidden">
@@ -210,9 +191,6 @@
         document.getElementById('car-' + carId).classList.add('active-car');
     };
 
-    // ==========================================
-    // ランキング管理
-    // ==========================================
     function formatTime(ms) {
         if (!ms || ms < 0) return "00:00.000";
         let d = new Date(ms);
@@ -225,13 +203,10 @@
     function saveAndGetRanking(courseId, carId, totalTime) {
         let key = `ds_ranking_${courseId}`;
         let ranking = JSON.parse(localStorage.getItem(key)) || [];
-        
         ranking.push({ time: totalTime, carId: carId, date: new Date().toLocaleDateString() });
         ranking.sort((a, b) => a.time - b.time); 
         ranking = ranking.slice(0, 5); 
-        
         localStorage.setItem(key, JSON.stringify(ranking));
-        
         let rankIndex = ranking.findIndex(r => r.time === totalTime && r.carId === carId);
         return rankIndex !== -1 ? rankIndex + 1 : -1;
     }
@@ -242,30 +217,20 @@
             let ranking = JSON.parse(localStorage.getItem(key)) || [];
             let el = document.getElementById(`ranking-${courseId}`);
             if (!el) return;
-            
-            if (ranking.length === 0) {
-                el.innerHTML = '<div style="text-align:center; color:#888;">No Records yet.</div>';
-                return;
-            }
-            
+            if (ranking.length === 0) { el.innerHTML = '<div style="text-align:center; color:#888;">No Records yet.</div>'; return; }
             let html = '';
             ranking.forEach((r, i) => {
                 let rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
                 html += `<div class="rank-row ${rankClass}">
-                    <span style="width: 25px;">${i+1}.</span>
-                    <span style="flex-grow: 1; text-align: center;">${formatTime(r.time)}</span>
+                    <span style="width: 25px;">${i+1}.</span><span style="flex-grow: 1; text-align: center;">${formatTime(r.time)}</span>
                     <span style="width: 60px; text-align: right; font-size: 0.8rem; color: #bbb;">[${r.carId}]</span>
                 </div>`;
             });
             el.innerHTML = html;
         });
     }
-
     updateMenuRanking();
 
-    // ==========================================
-    // レース状態管理
-    // ==========================================
     let raceState = 'MENU';
     let currentCourse = null;
     let currentCourseId = null;
@@ -279,23 +244,19 @@
 
     let tireSlips = [0, 0, 0, 0];
     let displayG = { x: 0, y: 0 }; 
-
     let isTiming = false;           
     let raceStartTime = 0;          
     let currentRunData = [];        
     let ghostData = null;           
     let replayStartTime = 0;        
     let replayTotalTime = 0;        
+    
+    let tireHeat = [0, 0, 0, 0]; 
 
     function showFlashMessage(text) {
         let el = document.getElementById('flash-message');
-        el.innerText = text;
-        el.style.opacity = 1;
-        el.style.transform = "translate(-50%, -50%) scale(1.2)";
-        setTimeout(() => {
-            el.style.opacity = 0;
-            el.style.transform = "translate(-50%, -50%) scale(1.0)";
-        }, 1200);
+        el.innerText = text; el.style.opacity = 1; el.style.transform = "translate(-50%, -50%) scale(1.2)";
+        setTimeout(() => { el.style.opacity = 0; el.style.transform = "translate(-50%, -50%) scale(1.0)"; }, 1200);
     }
 
     function createGate(x, y, width, yaw) {
@@ -309,13 +270,9 @@
         const curbWidth = 1.5 * SCALE; 
         const originalLineCap = ctx.lineCap;
         if (curbPaths && curbPaths.length > 0) {
-            ctx.lineCap = 'butt'; 
-            ctx.lineWidth = width + curbWidth * 2;
-            ctx.strokeStyle = '#D32F2F'; 
+            ctx.lineCap = 'butt'; ctx.lineWidth = width + curbWidth * 2; ctx.strokeStyle = '#D32F2F'; 
             curbPaths.forEach(fn => { ctx.beginPath(); fn(ctx); ctx.stroke(); });
-
-            ctx.strokeStyle = '#FFFFFF';
-            ctx.setLineDash([4 * SCALE, 4 * SCALE]); 
+            ctx.strokeStyle = '#FFFFFF'; ctx.setLineDash([4 * SCALE, 4 * SCALE]); 
             curbPaths.forEach(fn => { ctx.beginPath(); fn(ctx); ctx.stroke(); });
             ctx.setLineDash([]);
         }
@@ -400,49 +357,159 @@
         }
     };
 
-    let audioCtx = null, engineOsc = null, engineGain = null, brakeNoise = null, brakeGain = null;
+    // ==========================================
+    // オーディオ設定・制御 (+3dB 調整版)
+    // ==========================================
+    let audioCtx = null, engineOsc = null, engineGain = null;
+    let skidOsc = null, skidNoise = null, skidMix = null, skidFilter = null, skidGain = null;
+    let skidLfo = null, skidLfoGain = null, amGain = null;
     let isAudioInitialized = false;
 
     function initAudio() {
         if (isAudioInitialized) return;
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         
-        engineOsc = audioCtx.createOscillator(); engineOsc.type = 'sawtooth';
+        // --- エンジン音 ---
+        engineOsc = audioCtx.createOscillator(); 
+        engineOsc.type = 'sawtooth';
         engineGain = audioCtx.createGain();
         let engineFilter = audioCtx.createBiquadFilter();
-        engineFilter.type = 'lowpass'; engineFilter.frequency.value = 800;
+        engineFilter.type = 'lowpass'; 
+        engineFilter.frequency.value = 800;
         
-        engineOsc.connect(engineFilter); engineFilter.connect(engineGain); engineGain.connect(audioCtx.destination);
-        engineOsc.start(); engineGain.gain.value = 0;
+        engineOsc.connect(engineFilter); 
+        engineFilter.connect(engineGain); 
+        engineGain.connect(audioCtx.destination);
+        engineOsc.start(); 
+        engineGain.gain.value = 0;
 
+        // --- タイヤ摩擦音 (PDF物理モデル反映版) ---
+        // 1. スティックスリップの基本波 (ノコギリ波)
+        skidOsc = audioCtx.createOscillator();
+        skidOsc.type = 'sawtooth'; 
+        skidOsc.frequency.value = 800;
+        
+        // 2. 接触ノイズ
         const bufferSize = audioCtx.sampleRate * 2;
         const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
         const data = buffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        skidNoise = audioCtx.createBufferSource(); 
+        skidNoise.buffer = buffer; 
+        skidNoise.loop = true;
+
+        let noiseGain = audioCtx.createGain();
+        noiseGain.gain.value = 0.2; // ノイズは控えめに
+        skidNoise.connect(noiseGain);
+
+        // ミックス
+        skidMix = audioCtx.createGain();
+        skidOsc.connect(skidMix);
+        noiseGain.connect(skidMix);
+
+        // 3. コンタクトパッチ変形による縦溝共鳴フィルター (500〜4500Hzの広い帯域をカバー)
+        skidFilter = audioCtx.createBiquadFilter();
+        skidFilter.type = 'bandpass'; 
+        skidFilter.frequency.value = 500; 
+        skidFilter.Q.value = 3.0; 
+
+        skidMix.connect(skidFilter);
+
+        // 4. 励起振動 (マクロなビビり・チャタリング) を再現するAM変調
+        skidLfo = audioCtx.createOscillator();
+        skidLfo.type = 'sawtooth'; // ダッ・ダッという引っかかり
+        skidLfo.frequency.value = 40; 
         
-        brakeNoise = audioCtx.createBufferSource(); brakeNoise.buffer = buffer; brakeNoise.loop = true;
-        let brakeFilter = audioCtx.createBiquadFilter();
-        brakeFilter.type = 'bandpass'; brakeFilter.frequency.value = 2800; brakeFilter.Q.value = 2.0; 
+        skidLfoGain = audioCtx.createGain();
+        skidLfoGain.gain.value = 0;
+        skidLfo.connect(skidLfoGain);
+
+        amGain = audioCtx.createGain();
+        amGain.gain.value = 1.0;
+        skidLfoGain.connect(amGain.gain);
+
+        skidGain = audioCtx.createGain();
         
-        brakeGain = audioCtx.createGain();
-        brakeNoise.connect(brakeFilter); brakeFilter.connect(brakeGain); brakeGain.connect(audioCtx.destination);
-        brakeNoise.start(); brakeGain.gain.value = 0;
+        skidFilter.connect(amGain);
+        amGain.connect(skidGain);
+        skidGain.connect(audioCtx.destination);
+        
+        skidOsc.start();
+        skidNoise.start();
+        skidLfo.start();
+        skidGain.gain.value = 0;
 
         isAudioInitialized = true;
     }
 
-    function updateAudio(speed, accel, brake) {
+    function updateAudio(speed, accel, brake, slips = [0,0,0,0]) {
         if (!isAudioInitialized || !audioCtx) return;
+        
         let rpm = Math.abs(speed) * 12;
-        let targetFreq = 60 + rpm + accel * 60;
-        engineOsc.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.1);
-        let targetGain = (raceState === 'RACING' || raceState === 'REPLAY') ? (0.05 + accel * 0.1) : 0.02;
-        engineGain.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.1);
+        const REV_LIMIT = 550; 
+        let isRevLimit = rpm > REV_LIMIT;
+        
+        let targetFreq = 60 + Math.min(rpm, REV_LIMIT) + accel * 60;
+        let targetEngineGain = (raceState === 'RACING' || raceState === 'REPLAY') ? (0.05 + accel * 0.1) : 0.02;
 
-        let totalSlip = tireSlips.reduce((a, b) => a + b, 0); 
-        let slipGain = (speed > 2.0) ? Math.min(1.0, totalSlip * 0.5) : 0;
-        let targetBrakeGain = Math.max(slipGain, (brake > 0.8 && speed > 2.0) ? 0.3 : 0);
-        brakeGain.gain.setTargetAtTime(targetBrakeGain, audioCtx.currentTime, 0.05);
+        if (isRevLimit && accel > 0.5) {
+            if (performance.now() % 100 < 50) { 
+                targetEngineGain *= 0.3; targetFreq *= 0.95;
+            }
+        }
+        
+        engineOsc.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.1);
+        engineGain.gain.setTargetAtTime(targetEngineGain, audioCtx.currentTime, 0.1);
+
+        // --- 物理ベース スキール音の制御 ---
+        let maxSlip = 0;
+        let totalSlip = 0;
+        
+        for (let i = 0; i < 4; i++) {
+            let slip = slips[i] || 0;
+            totalSlip += slip;
+            if (slip > maxSlip) maxSlip = slip;
+            
+            // 熱の蓄積 (PDF: 摩擦熱による摩擦係数の低下とピッチアップ現象)
+            if (slip > 0.1) {
+                tireHeat[i] = Math.min(1.0, tireHeat[i] + 0.01);
+            } else {
+                tireHeat[i] = Math.max(0.0, tireHeat[i] - 0.005);
+            }
+        }
+        
+        let maxHeat = Math.max(...tireHeat);
+
+        // -------------------------------------------------------------
+        // ★ 音量のデシベル計算 (+3dB 調整)
+        // エンジン最大ゲインは 0.15 (0.05 + 1.0 * 0.1)。
+        // 振幅比で +3dB 持ち上げるには 10^(3/20) ≒ 1.4125 倍する
+        // -------------------------------------------------------------
+        const maxEngineGain = 0.15;
+        const skidGainMultiplier = maxEngineGain * Math.pow(10, 3/20); // 約 0.2119
+        
+        let slipGain = (speed > 2.0) ? Math.min(1.0, totalSlip * 0.4) : 0;
+        
+        // エンジンの最大音量よりも +3dB 分だけ大きくなるように係数を掛ける
+        let targetSkidGain = Math.max(slipGain, (brake > 0.8 && speed > 2.0) ? 0.8 : 0) * skidGainMultiplier; 
+        
+        // 1. スティックスリップ基本波のピッチアップ
+        // 熱が溜まると静止摩擦から動摩擦への移行が早くなり高周波へシフトする
+        let baseSkidFreq = 600 + (maxSlip * 400) + (maxHeat * 600); // 600〜1600Hz
+        skidOsc.frequency.setTargetAtTime(baseSkidFreq, audioCtx.currentTime, 0.1);
+        
+        // 2. コンタクトパッチ変形と縦溝のパイプ共鳴 (500〜4500Hz)
+        let resFreq = 500 + (maxSlip * 4000); 
+        skidFilter.frequency.setTargetAtTime(resFreq, audioCtx.currentTime, 0.1);
+        skidFilter.Q.setTargetAtTime(1.5 + maxSlip * 2.5, audioCtx.currentTime, 0.1); 
+        
+        // 3. マクロなビビり・チャタリング (LFO)
+        // 車速に応じた引っかかり周期（20〜80Hz）
+        let chatterFreq = Math.max(20, Math.min(80, speed * 2)); 
+        skidLfo.frequency.setTargetAtTime(chatterFreq, audioCtx.currentTime, 0.1);
+        skidLfoGain.gain.setTargetAtTime(maxSlip * 0.7, audioCtx.currentTime, 0.1);
+        
+        skidGain.gain.setTargetAtTime(targetSkidGain, audioCtx.currentTime, 0.05);
     }
 
     let inputSteer = 0, inputAccel = 0, inputBrake = 0;
@@ -456,10 +523,7 @@
             inputSteer = 0; inputAccel = 0; inputBrake = 0.8;
             return;
         }
-        if (!touchControl.active) {
-            inputSteer = 0; inputAccel = 0; inputBrake = 0;
-            return;
-        }
+        if (!touchControl.active) { inputSteer = 0; inputAccel = 0; inputBrake = 0; return; }
         let diffX = touchControl.currentX - touchControl.startX;
         let diffY = touchControl.currentY - touchControl.startY;
         inputSteer = Math.max(-1, Math.min(1, diffX / UI_RADIUS));
@@ -483,8 +547,7 @@
     }
     function handlePointerMove(e) {
         if (touchControl.active && e.pointerId === touchControl.id) {
-            touchControl.currentX = e.clientX; touchControl.currentY = e.clientY;
-            updateInputs();
+            touchControl.currentX = e.clientX; touchControl.currentY = e.clientY; updateInputs();
         }
     }
     function handlePointerUp(e) {
@@ -523,23 +586,16 @@
         let alpha_rl =       - Math.atan2(v - car.lr * r, u_safe - car.T/2 * r);
         let alpha_rr =       - Math.atan2(v - car.lr * r, u_safe + car.T/2 * r);
 
-        let engineForce = accelInput * 4500; 
-        let brakeForce = brakeInput * 11000; 
+        let engineForce = accelInput * 4500; let brakeForce = brakeInput * 11000; 
         let Fx_fl = 0, Fx_fr = 0, Fx_rl = 0, Fx_rr = 0;
 
-        if (car.driveType === 'FF') {
-            Fx_fl = engineForce * 0.5; Fx_fr = engineForce * 0.5;
-        } else if (car.driveType === 'FR') {
-            Fx_rl = engineForce * 0.5; Fx_rr = engineForce * 0.5;
-        }
+        if (car.driveType === 'FF') { Fx_fl = engineForce * 0.5; Fx_fr = engineForce * 0.5; } 
+        else if (car.driveType === 'FR') { Fx_rl = engineForce * 0.5; Fx_rr = engineForce * 0.5; }
 
-        Fx_fl -= brakeForce * car.brakeBias * 0.5 * Math.sign(u);
-        Fx_fr -= brakeForce * car.brakeBias * 0.5 * Math.sign(u);
-        Fx_rl -= brakeForce * (1 - car.brakeBias) * 0.5 * Math.sign(u);
-        Fx_rr -= brakeForce * (1 - car.brakeBias) * 0.5 * Math.sign(u);
+        Fx_fl -= brakeForce * car.brakeBias * 0.5 * Math.sign(u); Fx_fr -= brakeForce * car.brakeBias * 0.5 * Math.sign(u);
+        Fx_rl -= brakeForce * (1 - car.brakeBias) * 0.5 * Math.sign(u); Fx_rr -= brakeForce * (1 - car.brakeBias) * 0.5 * Math.sign(u);
 
-        let drag = -0.5 * u * Math.abs(u) - 25 * u;
-        Fx_rl += drag/2; Fx_rr += drag/2;
+        let drag = -0.5 * u * Math.abs(u) - 25 * u; Fx_rl += drag/2; Fx_rr += drag/2;
 
         function getTireForceY(alpha, Fz, Fx, C_alpha_param) {
             let max_F = car.mu * Fz;
@@ -600,35 +656,76 @@
 
     let skidMarks = [];
     let prevTirePos = [null, null, null, null];
+    let particles = [];
 
-    function updateSkidMarks() {
+    function spawnSmoke(wX, wY, slip) {
+        if (Math.random() > slip * 1.5) return; 
+        particles.push({
+            x: wX, y: wY,
+            vx: (Math.random() - 0.5) * 0.8,
+            vy: (Math.random() - 0.5) * 0.8,
+            life: 1.0,
+            size: (2 + Math.random() * 4) * SCALE / 12,
+            growth: 0.1 + Math.random() * 0.2
+        });
+    }
+
+    function updateAndDrawParticles(ctx) {
+        ctx.save();
+        for (let i = particles.length - 1; i >= 0; i--) {
+            let p = particles[i];
+            p.x += p.vx; p.y += p.vy;
+            p.life -= 0.025;
+            p.size += p.growth; 
+            
+            if (p.life <= 0) {
+                particles.splice(i, 1);
+            } else {
+                let alpha = p.life * 0.06;
+                ctx.fillStyle = `rgba(200, 200, 200, ${alpha})`;
+                ctx.beginPath(); 
+                ctx.arc(p.x * SCALE, p.y * SCALE, p.size * SCALE, 0, Math.PI * 2); 
+                ctx.fill();
+            }
+        }
+        ctx.restore();
+    }
+
+    function updateEffects(carState, slips) {
         if (!currentCar || (raceState !== 'RACING' && raceState !== 'REPLAY')) return;
         const offsets = [
             {x: currentCar.lf, y: -currentCar.T/2}, {x: currentCar.lf, y: currentCar.T/2},
             {x: -currentCar.lr, y: -currentCar.T/2}, {x: -currentCar.lr, y: currentCar.T/2}
         ];
         
-        let yaw = state[2]; let speed = Math.abs(state[3]);
+        let yaw = carState[2]; 
+        let speed = Math.abs(carState[3] !== undefined ? carState[3] : carState[6]); 
+        
         for(let i=0; i<4; i++) {
-            if (tireSlips[i] > 0.05 && speed > 3.0) { 
-                let wX = state[0] + offsets[i].x * Math.cos(yaw) - offsets[i].y * Math.sin(yaw);
-                let wY = state[1] + offsets[i].x * Math.sin(yaw) + offsets[i].y * Math.cos(yaw);
+            let slip = slips[i] || 0;
+            if (slip > 0.05 && speed > 3.0) { 
+                let wX = carState[0] + offsets[i].x * Math.cos(yaw) - offsets[i].y * Math.sin(yaw);
+                let wY = carState[1] + offsets[i].x * Math.sin(yaw) + offsets[i].y * Math.cos(yaw);
+                
                 if (prevTirePos[i]) {
-                    skidMarks.push({ p1: {x: prevTirePos[i].x, y: prevTirePos[i].y}, p2: {x: wX, y: wY}, life: 1.0, intensity: Math.min(1.0, tireSlips[i] * 1.5) });
+                    skidMarks.push({ p1: {x: prevTirePos[i].x, y: prevTirePos[i].y}, p2: {x: wX, y: wY}, life: 1.0, intensity: Math.min(1.0, slip * 1.5) });
                 }
                 prevTirePos[i] = {x: wX, y: wY};
+                
+                if (slip > 0.2) spawnSmoke(wX, wY, slip);
             } else { prevTirePos[i] = null; }
         }
         skidMarks.forEach(sm => sm.life -= 0.003); 
         skidMarks = skidMarks.filter(sm => sm.life > 0);
-        if (skidMarks.length > 400) skidMarks.splice(0, skidMarks.length - 400); 
+        if (skidMarks.length > 600) skidMarks.splice(0, skidMarks.length - 600); 
     }
 
     function drawSkidMarks(ctx) {
-        ctx.save(); ctx.lineCap = 'round'; ctx.lineWidth = 0.5 * SCALE; 
+        ctx.save(); ctx.lineCap = 'round'; 
         for(let sm of skidMarks) {
-            let alpha = Math.max(0, sm.life * sm.intensity * 0.6);
-            ctx.strokeStyle = `rgba(20, 20, 20, ${alpha})`;
+            let alpha = Math.max(0, sm.life * sm.intensity * 0.85); 
+            ctx.lineWidth = (0.2 + sm.intensity * 0.5) * SCALE; 
+            ctx.strokeStyle = `rgba(15, 15, 15, ${alpha})`; 
             ctx.beginPath(); ctx.moveTo(sm.p1.x * SCALE, sm.p1.y * SCALE); ctx.lineTo(sm.p2.x * SCALE, sm.p2.y * SCALE); ctx.stroke();
         }
         ctx.restore();
@@ -653,9 +750,15 @@
         while(dyaw > Math.PI) dyaw -= Math.PI*2;
         while(dyaw < -Math.PI) dyaw += Math.PI*2;
         
+        let s0 = p1[8]!==undefined ? p1[8] + (p2[8] - p1[8]) * ratio : 0;
+        let s1 = p1[9]!==undefined ? p1[9] + (p2[9] - p1[9]) * ratio : 0;
+        let s2 = p1[10]!==undefined ? p1[10] + (p2[10] - p1[10]) * ratio : 0;
+        let s3 = p1[11]!==undefined ? p1[11] + (p2[11] - p1[11]) * ratio : 0;
+
         return [
             t, p1[1] + (p2[1] - p1[1]) * ratio, p1[2] + (p2[2] - p1[2]) * ratio, p1[3] + dyaw * ratio,
-            p1[4] + (p2[4] - p1[4]) * ratio, p1[5] + (p2[5] - p1[5]) * ratio, p1[6] + (p2[6] - p1[6]) * ratio, p1[7] + (p2[7] - p1[7]) * ratio
+            p1[4] + (p2[4] - p1[4]) * ratio, p1[5] + (p2[5] - p1[5]) * ratio, p1[6] + (p2[6] - p1[6]) * ratio, p1[7] + (p2[7] - p1[7]) * ratio,
+            s0, s1, s2, s3
         ];
     }
 
@@ -823,7 +926,7 @@
     }
 
     // ==========================================
-    // ゲームフロー制御
+    // フロー管理
     // ==========================================
     window.startGame = function(courseId) {
         if (!isAudioInitialized) initAudio();
@@ -837,9 +940,9 @@
         inputSteer = 0; inputAccel = 0; inputBrake = 0; touchControl.active = false;
         
         currentLap = 0; nextGateIndex = 0; lapTimes = [];
-        skidMarks = []; prevTirePos = [null, null, null, null];
+        skidMarks = []; prevTirePos = [null, null, null, null]; particles = [];
         displayG = { x: 0, y: 0 }; tireSlips = [0, 0, 0, 0];
-        isTiming = false; currentRunData = [];
+        isTiming = false; currentRunData = []; tireHeat = [0, 0, 0, 0];
 
         const ghostKey = `ds_ghost_${currentCar.id}_${currentCourseId}`;
         const ghostStr = localStorage.getItem(ghostKey);
@@ -880,7 +983,8 @@
             localStorage.setItem(timeKey, total);
             let compressed = currentRunData.map(d => [
                 Math.round(d[0]), Math.round(d[1]*10)/10, Math.round(d[2]*10)/10, 
-                Math.round(d[3]*100)/100, Math.round(d[4]*10)/10, Math.round(d[5]*10)/10, Math.round(d[6]*10)/10, Math.round(d[7]*10)/10
+                Math.round(d[3]*100)/100, Math.round(d[4]*10)/10, Math.round(d[5]*10)/10, Math.round(d[6]*10)/10, Math.round(d[7]*10)/10,
+                Math.round((d[8]||0)*100)/100, Math.round((d[9]||0)*100)/100, Math.round((d[10]||0)*100)/100, Math.round((d[11]||0)*100)/100
             ]);
             try { localStorage.setItem(ghostKey, JSON.stringify(compressed)); } catch(e) { }
             if (rank <= 0) html += `<div style="margin-top:5px; color:#00FFFF; font-size:0.9rem;">(Ghost Updated!)</div>`;
@@ -897,7 +1001,7 @@
         document.getElementById('replay-ui').classList.remove('hidden');
         replayStartTime = performance.now();
         replayTotalTime = currentRunData[currentRunData.length - 1][0]; 
-        skidMarks = []; 
+        skidMarks = []; particles = [];
     }
 
     window.endReplay = function() {
@@ -932,14 +1036,15 @@
             ctx.save();
             ctx.translate(canvas.width / 2, canvas.height / 2);
             
-            // ★さらに倍率を上げてズーム（2.2倍 → 3.5倍）
             let zoom = Math.min(canvas.width / 200, canvas.height / 200) / SCALE * 3.5;
             ctx.scale(zoom, zoom);
-            
             ctx.translate(-rState[1] * SCALE, -rState[2] * SCALE);
 
             currentCourse.draw(ctx);
+            
+            updateEffects(rState, [rState[8], rState[9], rState[10], rState[11]]);
             drawSkidMarks(ctx); 
+            updateAndDrawParticles(ctx);
 
             if (ghostData) {
                 let gState = interpolateData(t, ghostData);
@@ -949,7 +1054,7 @@
             drawRecordedCar(ctx, currentCar, rState, false);
             ctx.restore();
 
-            updateAudio(Math.abs(rState[6]), rState[7], rState[5]);
+            updateAudio(Math.abs(rState[6]), rState[7], rState[5], [rState[8], rState[9], rState[10], rState[11]]);
             requestAnimationFrame(loop);
             return;
         }
@@ -959,11 +1064,13 @@
             
             if (raceState === 'RACING' && isTiming) {
                 let t = performance.now() - raceStartTime;
-                currentRunData.push([t, state[0], state[1], state[2], inputSteer, inputBrake, state[3], inputAccel]);
+                currentRunData.push([t, state[0], state[1], state[2], inputSteer, inputBrake, state[3], inputAccel, tireSlips[0], tireSlips[1], tireSlips[2], tireSlips[3]]);
             }
-            updateSkidMarks(); 
+            
+            updateEffects(state, tireSlips); 
+            
             if (raceState === 'RACING') checkGates(prevCarPos, {x: state[0], y: state[1]});
-            updateAudio(Math.abs(state[3]), inputAccel, inputBrake);
+            updateAudio(Math.abs(state[3]), inputAccel, inputBrake, tireSlips);
         }
         
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -972,7 +1079,10 @@
         if (currentCourse) {
             ctx.save();
             ctx.translate(carDisplayX, carDisplayY); ctx.rotate(-state[2] - Math.PI / 2); ctx.translate(-state[0] * SCALE, -state[1] * SCALE);
-            currentCourse.draw(ctx); drawSkidMarks(ctx); 
+            
+            currentCourse.draw(ctx); 
+            drawSkidMarks(ctx); 
+            updateAndDrawParticles(ctx);
 
             if (ghostData && raceState === 'RACING' && isTiming) {
                 let t = performance.now() - raceStartTime;
