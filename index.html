@@ -76,7 +76,7 @@
     <div id="ui-layer" class="hidden">
         <div style="font-size: 1.2rem;">速度: <span id="speed-disp">0</span> km/h</div>
         <div style="font-size: 0.8rem; margin-top: 5px; color: #ddd;">
-            【操作】下部の丸を指でスライド<br>
+            【操作】車を中心に指をスライド<br>
             ・左右：ハンドル<br>・上：アクセル / 下：ブレーキ
         </div>
     </div>
@@ -148,10 +148,9 @@
     // ==========================================
     function drawTrackWithCurbs(ctx, width, curbPaths, roadPaths) {
         const curbWidth = 1.5 * SCALE; 
-        const originalLineCap = ctx.lineCap; // 外側の設定（roundなど）を保存
+        const originalLineCap = ctx.lineCap;
         
         if (curbPaths && curbPaths.length > 0) {
-            // ★修正: 縁石の描画時は端を平坦にして、破線同士が重なって白ベタになるのを防ぐ
             ctx.lineCap = 'butt'; 
             
             ctx.lineWidth = width + curbWidth * 2;
@@ -161,7 +160,6 @@
             });
 
             ctx.strokeStyle = '#FFFFFF';
-            // ★修正: ダッシュの長さを少し長め（4m）にして視認性を向上
             ctx.setLineDash([4 * SCALE, 4 * SCALE]); 
             curbPaths.forEach(fn => {
                 ctx.beginPath(); fn(ctx); ctx.stroke();
@@ -169,7 +167,6 @@
             ctx.setLineDash([]);
         }
 
-        // コース本体の描画（元の端の丸め設定に戻す）
         ctx.lineCap = originalLineCap;
         ctx.lineWidth = width;
         ctx.strokeStyle = '#808080';
@@ -280,7 +277,6 @@
             startState: [5, 40, Math.PI, 0, 0, 0],
             draw: (ctx) => {
                 ctx.lineJoin = 'round'; 
-                // コース本体を滑らかにつなぐための設定
                 ctx.lineCap = 'round'; 
                 
                 const curbPaths = [
@@ -693,8 +689,10 @@
         
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        carDisplayX = canvas.width / 2; 
-        carDisplayY = canvas.height * 0.7;
+        // ★車の位置を操作UIの中心と一致させる
+        const uiCenter = getUICenter();
+        carDisplayX = uiCenter.x; 
+        carDisplayY = uiCenter.y;
         
         if (currentCourse) {
             ctx.save();
