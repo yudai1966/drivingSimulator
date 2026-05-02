@@ -100,11 +100,11 @@
         
         <div class="car-selection">
             <h3>SELECT MACHINE</h3>
-            <button id="car-ZWE211" class="car-btn active-car" onclick="selectCar('ZWE211')">
-                ZWE211<br><span style="font-size: 0.8rem; font-weight: normal;">(FF / グリップ安定)</span>
+            <button id="car-Modern_FF" class="car-btn active-car" onclick="selectCar('Modern_FF')">
+                Modern_FF<br><span style="font-size: 0.8rem; font-weight: normal;">(FF / グリップ安定)</span>
             </button>
-            <button id="car-AE86" class="car-btn" onclick="selectCar('AE86')">
-                AE86<br><span style="font-size: 0.8rem; font-weight: normal;">(FR / ドリフト志向)</span>
+            <button id="car-Retro_FR" class="car-btn" onclick="selectCar('Retro_FR')">
+                Retro_FR<br><span style="font-size: 0.8rem; font-weight: normal;">(FR / ドリフト志向)</span>
             </button>
         </div>
 
@@ -170,19 +170,19 @@
     resize();
 
     const carsData = {
-        ZWE211: {
-            id: 'ZWE211', mass: 1350, Iz: 1900, lf: 1.1, lr: 1.5,
+        Modern_FF: {
+            id: 'Modern_FF', mass: 1350, Iz: 1900, lf: 1.1, lr: 1.5,
             C_alpha_f: 65000, C_alpha_r: 90000, mu: 1.0,
             driveType: 'FF', brakeBias: 0.7, T: 1.53, h: 0.5
         },
-        AE86: {
-            id: 'AE86', mass: 950, Iz: 1200, lf: 1.2, lr: 1.2,
+        Retro_FR: {
+            id: 'Retro_FR', mass: 950, Iz: 1200, lf: 1.2, lr: 1.2,
             C_alpha_f: 45000, C_alpha_r: 45000, mu: 0.8,
             driveType: 'FR', brakeBias: 0.6, T: 1.53, h: 0.5
         }
     };
     
-    let selectedCarId = 'ZWE211';
+    let selectedCarId = 'Modern_FF';
     let currentCar = null;
 
     window.selectCar = function(carId) {
@@ -223,7 +223,7 @@
                 let rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
                 html += `<div class="rank-row ${rankClass}">
                     <span style="width: 25px;">${i+1}.</span><span style="flex-grow: 1; text-align: center;">${formatTime(r.time)}</span>
-                    <span style="width: 60px; text-align: right; font-size: 0.8rem; color: #bbb;">[${r.carId}]</span>
+                    <span style="width: 100px; text-align: right; font-size: 0.8rem; color: #bbb;">[${r.carId}]</span>
                 </div>`;
             });
             el.innerHTML = html;
@@ -259,8 +259,9 @@
         setTimeout(() => { el.style.opacity = 0; el.style.transform = "translate(-50%, -50%) scale(1.0)"; }, 1200);
     }
 
+    // ゲート作成関数: 判定ラインの幅を最適化し、隣のコースとの誤判定を防止
     function createGate(x, y, width, yaw) {
-        let detectionWidth = Math.max(width, 100); 
+        let detectionWidth = Math.max(width * 2.0, 60); 
         let dx = Math.cos(yaw + Math.PI/2) * (detectionWidth/2);
         let dy = Math.sin(yaw + Math.PI/2) * (detectionWidth/2);
         return { cx: x, cy: y, p1: { x: x - dx, y: y - dy }, p2: { x: x + dx, y: y + dy }, dir: { x: Math.cos(yaw), y: Math.sin(yaw) } };
@@ -350,16 +351,25 @@
                 drawStartLine(ctx, 0, 40, 10, Math.PI);
             },
             gates: [
-                createGate(0, 40, 20, Math.PI), createGate(-40, 40, 20, Math.PI), createGate(-60, 20, 20, -Math.PI/2), createGate(-40, 0, 20, 0),
-                createGate(-40, -20, 20, -Math.PI/2), createGate(-20, -20, 20, 0), createGate(-20, -40, 20, -Math.PI/2), createGate(10, -40, 20, 0),
-                createGate(40, -40, 20, 0), createGate(60, -20, 20, Math.PI/2), createGate(40, 0, 20, Math.PI), createGate(20, 20, 25, Math.PI/2), createGate(20, 40, 20, Math.PI)
+                // BUG FIX: 直角コーナーのゲート位置と方向を修正。角ではなく直線の中間に配置
+                createGate(0, 40, 20, Math.PI), 
+                createGate(-40, 40, 20, Math.PI), 
+                createGate(-60, 20, 20, -Math.PI/2), 
+                createGate(-40, 0, 20, -Math.PI/2), // 下向きに修正
+                createGate(-30, -20, 20, 0),        // 右向きに修正し、直線の中間へ
+                createGate(-20, -30, 20, -Math.PI/2), // 下向きに修正し、直線の中間へ
+                createGate(10, -40, 20, 0), 
+                createGate(40, -40, 20, 0), 
+                createGate(60, -20, 20, Math.PI/2), 
+                createGate(40, 0, 20, Math.PI), 
+                createGate(20, 20, 25, Math.PI/2), 
+                createGate(20, 40, 20, Math.PI) 
             ]
         }
     };
 
     // ==========================================
     // オーディオ設定・制御
-    // 限界の指標・極限状態の悲鳴など、物理メカニズムを反映したリアルスキール
     // ==========================================
     let audioCtx = null, engineOsc = null, engineGain = null;
     let skidOsc = null, skidNoise = null, skidMix = null, skidFilter = null, skidGain = null;
@@ -385,12 +395,10 @@
         engineGain.gain.value = 0;
 
         // --- タイヤ摩擦音 ---
-        // 1. スティックスリップの基本波 (ノコギリ波)
         skidOsc = audioCtx.createOscillator();
         skidOsc.type = 'sawtooth'; 
         skidOsc.frequency.value = 800;
         
-        // 2. 接触ノイズ
         const bufferSize = audioCtx.sampleRate * 2;
         const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
         const data = buffer.getChannelData(0);
@@ -400,15 +408,13 @@
         skidNoise.loop = true;
 
         let noiseGain = audioCtx.createGain();
-        noiseGain.gain.value = 0.2; // ノイズは控えめに
+        noiseGain.gain.value = 0.2; 
         skidNoise.connect(noiseGain);
 
-        // ミックス
         skidMix = audioCtx.createGain();
         skidOsc.connect(skidMix);
         noiseGain.connect(skidMix);
 
-        // 3. コンタクトパッチ変形による縦溝共鳴フィルター
         skidFilter = audioCtx.createBiquadFilter();
         skidFilter.type = 'bandpass'; 
         skidFilter.frequency.value = 500; 
@@ -416,7 +422,6 @@
 
         skidMix.connect(skidFilter);
 
-        // 4. 励起振動 (マクロなビビり・チャタリング) を再現するAM変調
         skidLfo = audioCtx.createOscillator();
         skidLfo.type = 'sawtooth'; 
         skidLfo.frequency.value = 40; 
@@ -462,67 +467,45 @@
         engineOsc.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.1);
         engineGain.gain.setTargetAtTime(targetEngineGain, audioCtx.currentTime, 0.1);
 
-        // --- 物理ベース スキール音の制御 ---
         let maxSlip = 0;
-        
         for (let i = 0; i < 4; i++) {
             let slip = slips[i] || 0;
             if (slip > maxSlip) maxSlip = slip;
             
-            // 熱の蓄積 (PDF: 摩擦熱による摩擦係数の低下とピッチアップ現象)
             if (slip > 0.1) {
                 tireHeat[i] = Math.min(1.0, tireHeat[i] + 0.01);
             } else {
                 tireHeat[i] = Math.max(0.0, tireHeat[i] - 0.005);
             }
         }
-        
         let maxHeat = Math.max(...tireHeat);
 
-        // -------------------------------------------------------------
-        // ★ 限界の指標としての「デッドゾーン」と「非線形の立ち上がり」
-        // -------------------------------------------------------------
-        let deadZone = 0.04; // スリップの許容範囲（無音ゾーン）
+        let deadZone = 0.04; 
         let effectiveSlip = Math.max(0, maxSlip - deadZone);
-        
-        // ピークを超えてトラクションが抜け始めた瞬間に急激に立ち上げるため 1.8乗を使用
         let slipPower = Math.pow(Math.min(1.0, effectiveSlip * 2.5), 1.8);
         let dynamicSlipGain = (speed > 2.0) ? Math.min(1.0, slipPower) : 0;
 
-        // 音量のデシベル計算 (+3dB 調整)
-        // エンジン最大ゲインは 0.15。振幅比で +3dB は約 1.4125 倍
         const maxEngineGain = 0.15;
-        const skidGainMultiplier = maxEngineGain * Math.pow(10, 3/20); // 約 0.2119
-        
+        const skidGainMultiplier = maxEngineGain * Math.pow(10, 3/20); 
         let targetSkidGain = Math.max(dynamicSlipGain, (brake > 0.8 && speed > 2.0) ? 0.8 : 0) * skidGainMultiplier; 
         
-        // -------------------------------------------------------------
-        // ★ 限界域での極限状態（ドアンダー、フルロック時の悲鳴）
-        // -------------------------------------------------------------
-        let extremeThreshold = 0.35; // 限界を大きく超えたと判定するスリップ量
+        let extremeThreshold = 0.35; 
         let extremeSlipFactor = Math.max(0, maxSlip - extremeThreshold) * 2.0; 
-        extremeSlipFactor = Math.min(1.0, extremeSlipFactor); // 0.0 〜 1.0
+        extremeSlipFactor = Math.min(1.0, extremeSlipFactor); 
 
-        // 1. スティックスリップ基本波のピッチアップ
-        // 熱蓄積によるシフトに加えて、極限状態でさらに数千Hz跳ね上がる
-        let baseSkidFreq = 600 + (maxSlip * 400) + (maxHeat * 600) + (extremeSlipFactor * 2500); 
+        let baseSkidFreq = 800 + (maxSlip * 400) + (maxHeat * 600) + (extremeSlipFactor * 2500); 
         skidOsc.frequency.setTargetAtTime(baseSkidFreq, audioCtx.currentTime, 0.1);
         
-        // 2. コンタクトパッチ変形と縦溝のパイプ共鳴
-        let resFreq = 500 + (maxSlip * 4000); 
+        let resFreq = 800 + (maxSlip * 3700); 
         skidFilter.frequency.setTargetAtTime(resFreq, audioCtx.currentTime, 0.1);
         
-        // 限界を大きく超えるとQ値が下がり、ノイズ感（ゴムがちぎれる悲鳴）が強調される
         let targetQ = 1.5 + maxSlip * 2.5; 
         targetQ = Math.max(0.5, targetQ - (extremeSlipFactor * 3.0)); 
         skidFilter.Q.setTargetAtTime(targetQ, audioCtx.currentTime, 0.1); 
         
-        // 3. マクロなビビり・チャタリング (LFO)
-        // 車速に応じた引っかかり周期（20〜80Hz）
         let chatterFreq = Math.max(20, Math.min(80, speed * 2)); 
         skidLfo.frequency.setTargetAtTime(chatterFreq, audioCtx.currentTime, 0.1);
         
-        // 極限状態でチャタリング（振動）の振幅を大きくして荒々しくする
         let targetLfoGain = maxSlip * 0.7 + (extremeSlipFactor * 1.5);
         skidLfoGain.gain.setTargetAtTime(targetLfoGain, audioCtx.currentTime, 0.1);
         
@@ -629,9 +612,16 @@
 
         function calcSlipFactor(alpha, Fz, Fx, C_alpha_param) {
             let max_F = car.mu * Fz;
-            let slipRatio = (C_alpha_param * Math.abs(alpha)) / max_F;
+            if (max_F <= 0.01) return 0;
+            
+            let Fy_linear = C_alpha_param * Math.abs(alpha) * (Fz / (car.mass * g / 4));
+            let slipRatio = Fy_linear / max_F;
             if (Math.abs(Fx) > max_F * 0.9) slipRatio += 0.5; 
-            return Math.max(0, slipRatio - 0.95); 
+            
+            let slip = Math.max(0, slipRatio - 0.95); 
+            // 荷重補正：アウト側により強く痕が出るように
+            let loadFactor = Fz / (car.mass * g / 4);
+            return slip * loadFactor;
         }
         
         tireSlips = [
@@ -822,10 +812,10 @@
         const carW = 1.8 * SCALE; const carL = (lf + lr) * SCALE + 1.8 * SCALE; const carRearX = -lr * SCALE - 0.9 * SCALE;
 
         if (isGhost) ctx.fillStyle = '#00FFFF';
-        else ctx.fillStyle = id === 'AE86' ? '#FFFFFF' : '#F5F5F5'; 
+        else ctx.fillStyle = id === 'Retro_FR' ? '#FFFFFF' : '#F5F5F5'; 
         ctx.fillRect(carRearX, -carW/2, carL, carW);
         
-        if (id === 'AE86' && !isGhost) {
+        if (id === 'Retro_FR' && !isGhost) {
             ctx.fillStyle = '#222'; ctx.fillRect(carRearX, -carW/2, carL, 2); ctx.fillRect(carRearX, carW/2 - 2, carL, 2);
         }
         if (!isGhost) {
@@ -855,8 +845,8 @@
         const { lf, lr, T, mass, id } = currentCar;
         const carW = 1.8 * SCALE; const carL = (lf + lr) * SCALE + 1.8 * SCALE; const carRearX = -lr * SCALE - 0.9 * SCALE;
 
-        ctx.fillStyle = id === 'AE86' ? '#FFFFFF' : '#F5F5F5'; ctx.fillRect(carRearX, -carW/2, carL, carW);
-        if (id === 'AE86') { ctx.fillStyle = '#222'; ctx.fillRect(carRearX, -carW/2, carL, 2); ctx.fillRect(carRearX, carW/2 - 2, carL, 2); }
+        ctx.fillStyle = id === 'Retro_FR' ? '#FFFFFF' : '#F5F5F5'; ctx.fillRect(carRearX, -carW/2, carL, carW);
+        if (id === 'Retro_FR') { ctx.fillStyle = '#222'; ctx.fillRect(carRearX, -carW/2, carL, 2); ctx.fillRect(carRearX, carW/2 - 2, carL, 2); }
         ctx.fillStyle = '#222222'; ctx.fillRect(0.2 * SCALE, -carW/2 + 2, 0.9 * SCALE, carW - 4); 
         ctx.strokeStyle = '#CCCCCC'; ctx.lineWidth = 1; ctx.strokeRect(carRearX, -carW/2, carL, carW);
 
