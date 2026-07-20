@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2D リアルドライビングシミュレーター 主観カメラ</title>
+    <title>3D リアルドライビングシミュレーター 主観カメラ</title>
+    <!-- Three.js の読み込み -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body {
             margin: 0; padding: 0; overflow: hidden;
-            background-color: #228B22;
+            background-color: #87CEEB; /* 空の色に変更 */
             touch-action: none; user-select: none;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
@@ -60,7 +62,6 @@
         .course-btn:active { transform: scale(0.95); }
         .course-desc { font-size: 0.9rem; color: #ccc; margin-bottom: 15px; text-align: center; }
         
-        /* Facebookボタン用のスタイル */
         .facebook-btn {
             background: #1877F2; 
             display: flex; justify-content: center; align-items: center; gap: 8px;
@@ -86,6 +87,28 @@
             color: white; text-shadow: 1px 1px 2px black;
             pointer-events: none; z-index: 10;
         }
+        
+        #joystick-base {
+            position: absolute; left: 50%; bottom: 50px;
+            width: 200px; height: 200px;
+            transform: translateX(-50%);
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            background-color: rgba(0, 0, 0, 0.1);
+            pointer-events: none; z-index: 10;
+            transition: background-color 0.2s;
+        }
+        #joystick-base.active-joystick {
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+        #joystick-knob {
+            position: absolute; left: 50%; top: 50%;
+            width: 50px; height: 50px;
+            margin-left: -25px; margin-top: -25px;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.9);
+        }
+
         #hud-layer {
             position: absolute; top: 10px; right: 20px;
             color: white; text-align: right; text-shadow: 1px 1px 2px black;
@@ -118,14 +141,12 @@
                 Retro_FR<br><span style="font-size: 0.8rem; font-weight: normal;">(FR / ドリフト志向)</span>
             </button>
             
-            <!-- --- ABS実装追加 --- -->
             <div style="margin-top: 15px; color: #ccc; font-size: 0.9rem;">
                 <label style="cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
                     <input type="checkbox" id="abs-toggle" checked style="width: 18px; height: 18px;">
                     <span>ABS (アンチロックブレーキシステム)</span>
                 </label>
             </div>
-            <!-- ------------------- -->
         </div>
 
         <div class="courses-wrapper">
@@ -151,9 +172,7 @@
             Credits<br>
             - Game Design & Programming: yudai1966<br>
             - Code Assistance: Gemini (Google)<br>
-            - Database: Google Firebase<br>
-            - Font: M PLUS 1p (SIL Open Font License)<br>
-            <br>
+            - 3D Engine: Three.js<br><br>
             本ゲームに登場する名称、車両、デザインはすべて架空のものであり、実在の人物・団体・企業とは一切関係ありません。
         </div>
     </div>
@@ -162,14 +181,10 @@
         <h2 style="font-size: 3rem; color: #FFD700; margin-bottom: 0;">GOAL!</h2>
         <div id="result-details"></div>
         <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px; width: 100%; max-width: 300px;">
-            
-            <!-- --- Facebookシェア機能追加 --- -->
             <button class="course-btn facebook-btn" style="margin: 0;" onclick="shareOnFacebook()">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
                 Facebookでシェア
             </button>
-            <!-- ---------------------------- -->
-
             <button class="course-btn" style="background: #1E90FF; margin: 0;" onclick="startReplay()">リプレイを見る</button>
             <button class="course-btn" style="background: #666; margin: 0;" onclick="backToMenu()">メニューへ</button>
         </div>
@@ -185,9 +200,15 @@
     <div id="ui-layer" class="hidden">
         <div style="font-size: 1.2rem;">速度: <span id="speed-disp">0</span> km/h</div>
         <div style="font-size: 0.8rem; margin-top: 5px; color: #ddd;">
-            【操作】車を中心に指をスライド<br>・左右：ハンドル<br>・上：アクセル / 下：ブレーキ
+            【操作】画面下部を中心に指をスライド<br>・左右：ハンドル<br>・上：アクセル / 下：ブレーキ<br>
         </div>
     </div>
+    
+    <!-- ジョイスティックのUIを追加 -->
+    <div id="joystick-base" class="hidden">
+        <div id="joystick-knob"></div>
+    </div>
+
     <div id="hud-layer" class="hidden">
         <div id="hud-lap">LAP: 1 / 3</div>
         <div id="hud-time">TIME: 00:00.000</div>
@@ -197,15 +218,453 @@
     <canvas id="gameCanvas"></canvas>
 
 <script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    
+    // ==========================================
+    // Three.js 初期化とセットアップ
+    // ==========================================
+    let scene, camera, renderer, carMesh, ghostMesh;
+    let gateMeshes = []; // コース上の全てのオブジェクトを管理
+
+    function initThreeJS() {
+        // シーン
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB); // 空色
+
+        // カメラ (初期位置は後で追従させる)
+        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+        // レンダラー
+        renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+
+        // ライト
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(50, 100, 50);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // 地面 (PlaneGeometry)
+        const planeGeo = new THREE.PlaneGeometry(1000, 1000);
+        const planeMat = new THREE.MeshLambertMaterial({ color: 0x228B22 }); // 森の緑
+        const plane = new THREE.Mesh(planeGeo, planeMat);
+        plane.rotation.x = -Math.PI / 2; // 水平にする
+        plane.receiveShadow = true;
+        scene.add(plane);
+
+        // 車とゴーストカーは Group として初期化し、中身は buildCarModel で生成する
+        carMesh = new THREE.Group();
+        scene.add(carMesh);
+
+        ghostMesh = new THREE.Group();
+        ghostMesh.visible = false;
+        scene.add(ghostMesh);
+    }
+
+    // ==========================================
+    // エフェクト生成 (アスファルト模様＆煙)
+    // ==========================================
+    let asphaltTexture = null;
+    function createAsphaltTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 256; canvas.height = 256;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#444444'; ctx.fillRect(0, 0, 256, 256);
+        // ランダムノイズを描画してアスファルトの質感を出す
+        for (let i = 0; i < 8000; i++) {
+            ctx.fillStyle = Math.random() > 0.5 ? '#555555' : '#333333';
+            ctx.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+        }
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        return tex;
+    }
+
+    let smokeTexture = null;
+    let smokeParticles = [];
+
+    function createSmokeTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 64; canvas.height = 64;
+        const ctx = canvas.getContext('2d');
+        const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+        grad.addColorStop(0, 'rgba(220, 220, 220, 0.7)');
+        grad.addColorStop(1, 'rgba(220, 220, 220, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 64, 64);
+        return new THREE.CanvasTexture(canvas);
+    }
+
+    function emitSmoke(x, z, intensity) {
+        if (!smokeTexture) smokeTexture = createSmokeTexture();
+        const mat = new THREE.SpriteMaterial({ 
+            map: smokeTexture, transparent: true, 
+            opacity: Math.min(1.0, intensity), depthWrite: false 
+        });
+        const sprite = new THREE.Sprite(mat);
+        sprite.position.set(x, 0.2, z); // 地面より少し浮かせた位置
+        const scale = 1.0 + Math.random() * 1.5;
+        sprite.scale.set(scale, scale, scale);
+        scene.add(sprite);
+        
+        smokeParticles.push({
+            sprite: sprite,
+            age: 0,
+            life: 0.6 + Math.random() * 0.4,
+            vx: (Math.random() - 0.5) * 1.5,
+            vy: 0.5 + Math.random() * 2.0, // 上へ立ち昇る
+            vz: (Math.random() - 0.5) * 1.5,
+            baseOpacity: Math.min(0.8, intensity)
+        });
+    }
+
+    function updateSmoke(dt) {
+        for (let i = smokeParticles.length - 1; i >= 0; i--) {
+            const p = smokeParticles[i];
+            p.age += dt;
+            if (p.age > p.life) {
+                scene.remove(p.sprite);
+                p.sprite.material.dispose();
+                smokeParticles.splice(i, 1);
+            } else {
+                p.sprite.position.x += p.vx * dt;
+                p.sprite.position.y += p.vy * dt;
+                p.sprite.position.z += p.vz * dt;
+                const progress = p.age / p.life;
+                p.sprite.material.opacity = p.baseOpacity * (1 - progress); // 徐々に消える
+                const scale = p.sprite.scale.x + dt * 3.0; // 徐々に広がる
+                p.sprite.scale.set(scale, scale, scale);
+            }
+        }
+    }
+
+    function clearSmoke() {
+        smokeParticles.forEach(p => {
+            scene.remove(p.sprite);
+            p.sprite.material.dispose();
+        });
+        smokeParticles = [];
+    }
+
+    // 物理シミュレーションの結果からタイヤの位置を算出し、スリップしていたら煙を出す
+    function handleSmokeEmissions(carState, slips, carDef) {
+        if (!carDef) return;
+        const cx = carState[0]; const cy = carState[1]; const cyaw = carState[2];
+        const lf = carDef.lf; const lr = carDef.lr; const T = carDef.T;
+        
+        const tireOffsets = [
+            { x: lf, y: T/2 }, { x: lf, y: -T/2 }, { x: -lr, y: T/2 }, { x: -lr, y: -T/2 }
+        ];
+        
+        for (let i = 0; i < 4; i++) {
+            if (slips[i] > 0.15) { // スリップが一定以上のときに煙を発生
+                const wx = cx + tireOffsets[i].x * Math.cos(cyaw) - tireOffsets[i].y * Math.sin(cyaw);
+                const wy = cy + tireOffsets[i].x * Math.sin(cyaw) + tireOffsets[i].y * Math.cos(cyaw);
+                emitSmoke(wx, wy, (slips[i] - 0.15) * 2.0); // 2DのYが3DのZになる
+            }
+        }
+    }
+
+    // 車のモデルを組み立てる関数
+    function buildCarModel(group, carId, isGhost) {
+        // マテリアルの設定
+        const matBody = isGhost ? 
+            new THREE.MeshLambertMaterial({ color: 0x00FFFF, transparent: true, opacity: 0.5 }) :
+            new THREE.MeshLambertMaterial({ color: carId === 'Retro_FR' ? 0xffffff : 0xaaaaaa });
+            
+        const matWindow = isGhost ? 
+            new THREE.MeshLambertMaterial({ color: 0x00FFFF, transparent: true, opacity: 0.5 }) :
+            new THREE.MeshLambertMaterial({ color: 0x222222 });
+
+        const matTire = isGhost ? 
+            new THREE.MeshLambertMaterial({ color: 0x00FFFF, transparent: true, opacity: 0.5 }) :
+            new THREE.MeshLambertMaterial({ color: 0x111111 });
+
+        let bodyGeo, cabinGeo, roofGeo;
+        let bodyX, bodyY, cabinX, cabinY, roofX, roofY;
+
+        if (carId === 'Retro_FR') {
+            // パターンA: 'Retro_FR'（AE86風：ロングノーズ・ショートデッキ）
+            bodyGeo = new THREE.BoxGeometry(4.0, 0.5, 1.8);
+            bodyX = 0; bodyY = 0.4;
+            cabinGeo = new THREE.BoxGeometry(1.8, 0.45, 1.4);
+            cabinX = -0.3; cabinY = 0.875;
+            roofGeo = new THREE.BoxGeometry(1.8, 0.05, 1.4);
+            roofX = -0.3; roofY = 1.125;
+        } else {
+            // パターンB: 'Modern_FF'（カローラスポーツ風：ショートノーズ・ハッチバック）
+            bodyGeo = new THREE.BoxGeometry(3.8, 0.6, 1.8);
+            bodyX = 0.1; bodyY = 0.45;
+            cabinGeo = new THREE.BoxGeometry(2.4, 0.45, 1.4);
+            cabinX = 0.1; cabinY = 0.975;
+            roofGeo = new THREE.BoxGeometry(2.0, 0.05, 1.4);
+            roofX = 0.3; roofY = 1.225;
+        }
+
+        // ボディ下部
+        const bodyMesh = new THREE.Mesh(bodyGeo, matBody);
+        bodyMesh.position.set(bodyX, bodyY, 0);
+        bodyMesh.castShadow = true;
+        bodyMesh.name = 'body';
+        group.add(bodyMesh);
+
+        // キャビン（窓ガラスを兼ねる）
+        const cabinMesh = new THREE.Mesh(cabinGeo, matWindow);
+        cabinMesh.position.set(cabinX, cabinY, 0);
+        cabinMesh.castShadow = true;
+        group.add(cabinMesh);
+
+        // ルーフ（ボディ同色）
+        const roofMesh = new THREE.Mesh(roofGeo, matBody);
+        roofMesh.position.set(roofX, roofY, 0);
+        roofMesh.castShadow = true;
+        group.add(roofMesh);
+
+        // タイヤ（共通配置）
+        const tireGeo = new THREE.BoxGeometry(0.6, 0.6, 0.3);
+        const tirePositions = [
+            { x: 1.2, z: 0.8 },  // 前左
+            { x: 1.2, z: -0.8 }, // 前右
+            { x: -1.2, z: 0.8 }, // 後左
+            { x: -1.2, z: -0.8 } // 後右
+        ];
+        
+        tirePositions.forEach(pos => {
+            const tireMesh = new THREE.Mesh(tireGeo, matTire);
+            tireMesh.position.set(pos.x, 0.3, pos.z);
+            tireMesh.castShadow = true;
+            group.add(tireMesh);
+        });
+    }
+
+    // コースのゲートと縁石を3D空間に配置する（CubicBezierCurve3を使用）
+    function setupCourse3D(course) {
+        // 古いゲートと縁石を削除
+        gateMeshes.forEach(m => scene.remove(m));
+        gateMeshes = [];
+
+        // 縁石・ライン用ブロックの基本形状
+        const curbWidth = 1.0;
+        const curbHeight = 0.02; // 高さを0.1から0.02に変更し薄くする
+        const curbLength = 1.0;
+        const curbGeo = new THREE.BoxGeometry(curbWidth, curbHeight, curbLength);
+        
+        const matRed = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+        const matWhite = new THREE.MeshLambertMaterial({ color: 0xffffff });
+        const matBlack = new THREE.MeshLambertMaterial({ color: 0x222222 });
+
+        const roadPositions = [];
+        const roadIndices = [];
+        const roadUvs = []; // テクスチャマッピング用UV配列
+        let vertexIndex = 0;
+        let currentV = 0;
+        const roadY = 0.03; // Z-fighting回避用のアスファルトの高さ（縁石の上に描画するため0.03に上げる）
+
+        // 赤白縁石の色を繋げるための累積距離
+        let totalCurbDistanceL = 0;
+        let totalCurbDistanceR = 0;
+
+        // セグメント間に縁石を配置する関数
+        const createCurb = (startPt, endPt, isLeft) => {
+            const dx = endPt.x - startPt.x;
+            const dz = endPt.z - startPt.z;
+            const dist = Math.hypot(dx, dz);
+            if (dist <= 0) return;
+            
+            const numBlocks = Math.max(1, Math.floor(dist / curbLength));
+            const actualLen = dist / numBlocks;
+            const angle = Math.atan2(dx, dz); // Three.jsのrotation.y用
+            
+            for (let b = 0; b < numBlocks; b++) {
+                // 累積距離から色を決定してシームレスな赤白パターンを作る
+                const currentDist = (isLeft ? totalCurbDistanceL : totalCurbDistanceR) + b * actualLen;
+                const isRed = Math.floor(currentDist / curbLength) % 2 === 0;
+                const mat = isRed ? matRed : matWhite;
+                
+                const mesh = new THREE.Mesh(curbGeo, mat);
+                const progress = (b + 0.5) / numBlocks;
+                
+                mesh.position.set(startPt.x + dx * progress, 0.01, startPt.z + dz * progress); // 縁石のY座標を0.01に下げる
+                mesh.rotation.y = angle;
+                mesh.scale.z = actualLen / curbLength;
+                mesh.receiveShadow = true;
+                
+                scene.add(mesh);
+                gateMeshes.push(mesh);
+            }
+            
+            if (isLeft) totalCurbDistanceL += dist;
+            else totalCurbDistanceR += dist;
+        };
+
+        // 各ゲート間をベジェ曲線で繋ぐ
+        for (let i = 0; i < course.gates.length; i++) {
+            const gate = course.gates[i];
+            const nextGate = course.gates[(i + 1) % course.gates.length];
+
+            // ベジェ曲線の制御点計算 (2DのY座標を3DのZ座標として扱う)
+            const p0 = new THREE.Vector3(gate.cx, 0, gate.cy);
+            const p3 = new THREE.Vector3(nextGate.cx, 0, nextGate.cy);
+            const dist = p0.distanceTo(p3);
+            
+            // 制御点1: 始点から進行方向へ距離の0.4倍進む
+            const p1 = new THREE.Vector3(
+                gate.cx + gate.dir.x * dist * 0.4, 
+                0, 
+                gate.cy + gate.dir.y * dist * 0.4
+            );
+            // 制御点2: 終点から逆方向へ距離の0.4倍
+            const p2 = new THREE.Vector3(
+                nextGate.cx - nextGate.dir.x * dist * 0.4, 
+                0, 
+                nextGate.cy - nextGate.dir.y * dist * 0.4
+            );
+
+            // 曲線生成と分割
+            const curve = new THREE.CubicBezierCurve3(p0, p1, p2, p3);
+            const segments = 20;
+            const points = curve.getPoints(segments);
+
+            // ゲート幅 (中心から端までの距離) に0.4を掛けて2D版の道幅に合わせる
+            const wStart = Math.hypot(gate.p1.x - gate.cx, gate.p1.y - gate.cy) * 0.4;
+            const wEnd = Math.hypot(nextGate.p1.x - nextGate.cx, nextGate.p1.y - nextGate.cy) * 0.4;
+
+            for (let j = 0; j < segments; j++) {
+                const pt0 = points[j];
+                const pt1 = points[j + 1];
+                
+                // 曲線の接線 (tangent) を取得
+                const tangent0 = curve.getTangent(j / segments).normalize();
+                const tangent1 = curve.getTangent((j + 1) / segments).normalize();
+                
+                // 接線から法線ベクトル（左右方向）を計算
+                // 2D平面上の進行方向に対して、左は(-Z, X)、右は(Z, -X)
+                const leftDir0 = new THREE.Vector3(-tangent0.z, 0, tangent0.x);
+                const rightDir0 = new THREE.Vector3(tangent0.z, 0, -tangent0.x);
+                const leftDir1 = new THREE.Vector3(-tangent1.z, 0, tangent1.x);
+                const rightDir1 = new THREE.Vector3(tangent1.z, 0, -tangent1.x);
+
+                // 幅を線形補間
+                const w0 = wStart + (wEnd - wStart) * (j / segments);
+                const w1 = wStart + (wEnd - wStart) * ((j + 1) / segments);
+
+                // 左右の頂点を計算 (p2側が左、p1側が右)
+                const p2_0 = new THREE.Vector3().copy(pt0).add(leftDir0.clone().multiplyScalar(w0));
+                const p1_0 = new THREE.Vector3().copy(pt0).add(rightDir0.clone().multiplyScalar(w0));
+                const p2_1 = new THREE.Vector3().copy(pt1).add(leftDir1.clone().multiplyScalar(w1));
+                const p1_1 = new THREE.Vector3().copy(pt1).add(rightDir1.clone().multiplyScalar(w1));
+
+                // UVマッピング用の進行方向の距離を計算（約4.0ごとにテクスチャが1周）
+                const distV = pt0.distanceTo(pt1) / 4.0;
+                const nextV = currentV + distV;
+
+                // 道路メッシュの頂点追加
+                roadPositions.push(p1_0.x, roadY, p1_0.z);       // 0: 右後
+                roadPositions.push(p2_0.x, roadY, p2_0.z);       // 1: 左後
+                roadPositions.push(p1_1.x, roadY, p1_1.z);       // 2: 右前
+                roadPositions.push(p2_1.x, roadY, p2_1.z);       // 3: 左前
+
+                // UV座標の追加
+                roadUvs.push(1, currentV);
+                roadUvs.push(0, currentV);
+                roadUvs.push(1, nextV);
+                roadUvs.push(0, nextV);
+                
+                currentV = nextV;
+
+                // 2つの三角形ポリゴン
+                roadIndices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
+                roadIndices.push(vertexIndex + 1, vertexIndex + 3, vertexIndex + 2);
+                vertexIndex += 4;
+
+                // 縁石の生成
+                createCurb(p2_0, p2_1, true);   // 左側縁石
+                createCurb(p1_0, p1_1, false);  // 右側縁石
+            }
+        }
+
+        // 道路メッシュの生成
+        if (roadPositions.length > 0) {
+            // 自動生成したアスファルトテクスチャを割り当てる
+            if (!asphaltTexture) asphaltTexture = createAsphaltTexture();
+            
+            const roadGeo = new THREE.BufferGeometry();
+            roadGeo.setAttribute('position', new THREE.Float32BufferAttribute(roadPositions, 3));
+            roadGeo.setAttribute('uv', new THREE.Float32BufferAttribute(roadUvs, 2));
+            roadGeo.setIndex(roadIndices);
+            roadGeo.computeVertexNormals();
+
+            const roadMat = new THREE.MeshLambertMaterial({ 
+                color: 0xaaaaaa, // テクスチャと掛け合わせるためベースを明るめに
+                map: asphaltTexture,
+                side: THREE.DoubleSide 
+            });
+            const roadMesh = new THREE.Mesh(roadGeo, roadMat);
+            roadMesh.receiveShadow = true;
+            scene.add(roadMesh);
+            gateMeshes.push(roadMesh);
+        }
+
+        // スタート/ゴールライン
+        if (course.gates.length > 0) {
+            const startGate = course.gates[0];
+            
+            // ゲート幅(中心から端まで)を0.4倍して道幅に合わせる
+            const wStart = Math.hypot(startGate.p1.x - startGate.cx, startGate.p1.y - startGate.cy) * 0.4;
+            
+            // 進行方向から直角方向(左右)のベクトルを計算
+            const leftDir = new THREE.Vector3(-startGate.dir.y, 0, startGate.dir.x);
+            const rightDir = new THREE.Vector3(startGate.dir.y, 0, -startGate.dir.x);
+            
+            // 中心座標
+            const pCenter = new THREE.Vector3(startGate.cx, 0, startGate.cy);
+            
+            // 中心座標から左右に wStart ずつ伸ばした位置を始点・終点とする
+            const pStart = new THREE.Vector3().copy(pCenter).add(leftDir.multiplyScalar(wStart));
+            const pEnd = new THREE.Vector3().copy(pCenter).add(rightDir.multiplyScalar(wStart));
+            
+            const dx = pEnd.x - pStart.x;
+            const dz = pEnd.z - pStart.z;
+            const dist = Math.hypot(dx, dz);
+            
+            if (dist > 0) {
+                const numBlocks = Math.max(1, Math.floor(dist / curbLength));
+                const actualLen = dist / numBlocks;
+                const angle = Math.atan2(dx, dz);
+                
+                for (let b = 0; b < numBlocks; b++) {
+                    const mat = b % 2 === 0 ? matWhite : matBlack;
+                    const mesh = new THREE.Mesh(curbGeo, mat);
+                    const progress = (b + 0.5) / numBlocks;
+                    mesh.position.set(pStart.x + dx * progress, 0.04, pStart.z + dz * progress); // アスファルトより少し上の0.04に配置
+                    mesh.rotation.y = angle;
+                    mesh.scale.z = actualLen / curbLength;
+                    mesh.receiveShadow = true;
+                    scene.add(mesh);
+                    gateMeshes.push(mesh);
+                }
+            }
+        }
+    }
+
+    // ウィンドウリサイズ対応
     function resize() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        if (camera && renderer) {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
     }
     window.addEventListener('resize', resize);
     resize();
+
+    // ==========================================
+    // 物理エンジン定数とデータ
+    // ==========================================
+    const g = 9.81;
 
     const carsData = {
         Modern_FF: {
@@ -222,7 +681,7 @@
     
     let selectedCarId = 'Modern_FF';
     let currentCar = null;
-    let absEnabled = true; // --- ABS状態フラグ ---
+    let absEnabled = true;
 
     window.selectCar = function(carId) {
         selectedCarId = carId;
@@ -278,21 +737,16 @@
     let currentLapStartTime = 0;
     let lapTimes = [];
     let prevCarPos = {x: 0, y: 0};
-    const SCALE = 12; 
-    const g = 9.81;
 
     let tireSlips = [0, 0, 0, 0];
-    let displayG = { x: 0, y: 0 }; 
     let isTiming = false;           
     let raceStartTime = 0;          
     let currentRunData = [];        
     let ghostData = null;           
     let replayStartTime = 0;        
     let replayTotalTime = 0;        
-    
     let tireHeat = [0, 0, 0, 0]; 
 
-    // メッセージの改行・文字サイズ対応
     function showFlashMessage(text, isLong = false) {
         let el = document.getElementById('flash-message');
         el.innerHTML = text.replace(/\n/g, "<br>");
@@ -312,49 +766,10 @@
         return { cx: x, cy: y, p1: { x: x - dx, y: y - dy }, p2: { x: x + dx, y: y + dy }, dir: { x: Math.cos(yaw), y: Math.sin(yaw) } };
     }
 
-    function drawTrackWithCurbs(ctx, width, curbPaths, roadPaths) {
-        const curbWidth = 1.5 * SCALE; 
-        const originalLineCap = ctx.lineCap;
-        if (curbPaths && curbPaths.length > 0) {
-            ctx.lineCap = 'butt'; ctx.lineWidth = width + curbWidth * 2; ctx.strokeStyle = '#D32F2F'; 
-            curbPaths.forEach(fn => { ctx.beginPath(); fn(ctx); ctx.stroke(); });
-            ctx.strokeStyle = '#FFFFFF'; ctx.setLineDash([4 * SCALE, 4 * SCALE]); 
-            curbPaths.forEach(fn => { ctx.beginPath(); fn(ctx); ctx.stroke(); });
-            ctx.setLineDash([]);
-        }
-        ctx.lineCap = originalLineCap; ctx.lineWidth = width; ctx.strokeStyle = '#808080';
-        roadPaths.forEach(fn => { ctx.beginPath(); fn(ctx); ctx.stroke(); });
-    }
-
-    function drawStartLine(ctx, x, y, width, yaw=0) {
-        ctx.save(); ctx.translate(x * SCALE, y * SCALE); ctx.rotate(yaw);
-        ctx.beginPath(); ctx.rect(-1.5 * SCALE, -width/2 * SCALE, 3 * SCALE, width * SCALE); ctx.clip(); 
-        ctx.fillStyle = '#FFFFFF'; ctx.fillRect(-1.5 * SCALE, -width/2 * SCALE, 3 * SCALE, width * SCALE);
-        ctx.fillStyle = '#000000';
-        for(let i = -Math.floor(width/2) - 3; i <= Math.ceil(width/2) + 3; i += 1.5) {
-            if(Math.abs(Math.round(i / 1.5) % 2) === 1) {
-                ctx.fillRect(-1.5 * SCALE, i * SCALE, 1.5 * SCALE, 1.5 * SCALE);
-                ctx.fillRect(0, (i+1.5) * SCALE, 1.5 * SCALE, 1.5 * SCALE);
-            }
-        }
-        ctx.restore();
-    }
-
+    // 2D描画ロジックは削除し、物理的なゲート座標のみ定義
     const courses = {
         oval: {
             name: 'オーバル', laps: 3, startState: [-5, -30, 0, 0, 0, 0], 
-            draw: (ctx) => {
-                ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
-                const curbPaths = [
-                    (c) => { c.moveTo(-30 * SCALE, 30 * SCALE); c.lineTo(-50 * SCALE, 30 * SCALE); c.arc(-50 * SCALE, 0, 30 * SCALE, Math.PI/2, Math.PI*1.5); c.lineTo(-30 * SCALE, -30 * SCALE); },
-                    (c) => { c.moveTo(30 * SCALE, -30 * SCALE); c.lineTo(50 * SCALE, -30 * SCALE); c.arc(50 * SCALE, 0, 30 * SCALE, -Math.PI/2, Math.PI/2); c.lineTo(30 * SCALE, 30 * SCALE); }
-                ];
-                const roadPaths = [
-                    (c) => { c.arc(-50 * SCALE, 0, 30 * SCALE, Math.PI/2, Math.PI*1.5); c.lineTo(50 * SCALE, -30 * SCALE); c.arc(50 * SCALE, 0, 30 * SCALE, -Math.PI/2, Math.PI/2); c.closePath(); }
-                ];
-                drawTrackWithCurbs(ctx, 12 * SCALE, curbPaths, roadPaths);
-                drawStartLine(ctx, 0, -30, 12, 0);
-            },
             gates: [
                 createGate(0, -30, 16, 0), createGate(50, -30, 20, 0), createGate(80, 0, 20, Math.PI/2), createGate(50, 30, 20, Math.PI),
                 createGate(0, 30, 20, Math.PI), createGate(-50, 30, 20, Math.PI), createGate(-80, 0, 20, -Math.PI/2), createGate(-50, -30, 20, 0)
@@ -362,19 +777,6 @@
         },
         figure8: {
             name: '8の字', laps: 2, startState: [-38, 33, 0, 0, 0, 0],
-            draw: (ctx) => {
-                ctx.lineCap = 'butt';
-                const curbPaths = [
-                    (c) => { c.arc(-33 * SCALE, 0, 33 * SCALE, Math.PI/4, Math.PI * 1.75); },
-                    (c) => { c.arc(33 * SCALE, 0, 33 * SCALE, -Math.PI*0.75, Math.PI * 0.75); }
-                ];
-                const roadPaths = [
-                    (c) => { c.arc(-33 * SCALE, 0, 33 * SCALE, 0, Math.PI * 2); },
-                    (c) => { c.arc(33 * SCALE, 0, 33 * SCALE, 0, Math.PI * 2); }
-                ];
-                drawTrackWithCurbs(ctx, 10 * SCALE, curbPaths, roadPaths);
-                drawStartLine(ctx, -33, 33, 10, 0);
-            },
             gates: [
                 createGate(-33, 33, 20, 0), createGate(0, 0, 25, -Math.PI/4), createGate(33, -33, 20, 0), createGate(66, 0, 20, Math.PI/2),
                 createGate(33, 33, 20, Math.PI), createGate(0, 0, 25, -Math.PI*3/4), createGate(-33, -33, 20, Math.PI), createGate(-66, 0, 20, Math.PI/2)
@@ -382,38 +784,17 @@
         },
         technical: {
             name: 'テクニカル', laps: 2, startState: [5, 40, Math.PI, 0, 0, 0],
-            draw: (ctx) => {
-                ctx.lineJoin = 'round'; ctx.lineCap = 'round'; 
-                const curbPaths = [
-                    (c) => { c.moveTo(-20 * SCALE, 40 * SCALE); c.lineTo(-40 * SCALE, 40 * SCALE); c.arc(-40 * SCALE, 20 * SCALE, 20 * SCALE, Math.PI/2, Math.PI*1.5); c.lineTo(-40 * SCALE, -10 * SCALE); },
-                    (c) => { c.moveTo(-35 * SCALE, -20 * SCALE); c.lineTo(-20 * SCALE, -20 * SCALE); c.lineTo(-20 * SCALE, -40 * SCALE); c.lineTo(-5 * SCALE, -40 * SCALE); },
-                    (c) => { c.moveTo(25 * SCALE, -40 * SCALE); c.lineTo(40 * SCALE, -40 * SCALE); c.arc(40 * SCALE, -20 * SCALE, 20 * SCALE, -Math.PI/2, Math.PI/2); c.bezierCurveTo(0, 0, 40 * SCALE, 40 * SCALE, 20 * SCALE, 40 * SCALE); c.lineTo(10 * SCALE, 40 * SCALE); }
-                ];
-                const roadPaths = [
-                    (c) => { c.moveTo(20 * SCALE, 40 * SCALE); c.lineTo(-40 * SCALE, 40 * SCALE); c.arc(-40 * SCALE, 20 * SCALE, 20 * SCALE, Math.PI/2, Math.PI*1.5); c.lineTo(-40 * SCALE, -20 * SCALE); c.lineTo(-20 * SCALE, -20 * SCALE); c.lineTo(-20 * SCALE, -40 * SCALE); c.lineTo(40 * SCALE, -40 * SCALE); c.arc(40 * SCALE, -20 * SCALE, 20 * SCALE, -Math.PI/2, Math.PI/2); c.bezierCurveTo(0, 0, 40 * SCALE, 40 * SCALE, 20 * SCALE, 40 * SCALE); }
-                ];
-                drawTrackWithCurbs(ctx, 10 * SCALE, curbPaths, roadPaths);
-                drawStartLine(ctx, 0, 40, 10, Math.PI);
-            },
             gates: [
-                createGate(0, 40, 20, Math.PI), 
-                createGate(-40, 40, 20, Math.PI), 
-                createGate(-60, 20, 20, -Math.PI/2), 
-                createGate(-40, 0, 20, -Math.PI/2), 
-                createGate(-30, -20, 20, 0),        
-                createGate(-20, -30, 20, -Math.PI/2), 
-                createGate(10, -40, 20, 0), 
-                createGate(40, -40, 20, 0), 
-                createGate(60, -20, 20, Math.PI/2), 
-                createGate(40, 0, 20, Math.PI), 
-                createGate(20, 20, 25, Math.PI/2), 
-                createGate(20, 40, 20, Math.PI) 
+                createGate(0, 40, 20, Math.PI), createGate(-40, 40, 20, Math.PI), createGate(-60, 20, 20, -Math.PI/2), 
+                createGate(-40, 0, 20, -Math.PI/2), createGate(-30, -20, 20, 0), createGate(-20, -30, 20, -Math.PI/2), 
+                createGate(10, -40, 20, 0), createGate(40, -40, 20, 0), createGate(60, -20, 20, Math.PI/2), 
+                createGate(40, 0, 20, Math.PI), createGate(20, 20, 25, Math.PI/2), createGate(20, 40, 20, Math.PI) 
             ]
         }
     };
 
     // ==========================================
-    // オーディオ設定・制御
+    // オーディオ設定・制御 (既存ロジック維持)
     // ==========================================
     let audioCtx = null, engineOsc = null, engineGain = null;
     let skidOsc = null, skidNoise = null, skidMix = null, skidFilter = null, skidGain = null;
@@ -424,7 +805,6 @@
         if (isAudioInitialized) return;
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         
-        // --- エンジン音 ---
         engineOsc = audioCtx.createOscillator(); 
         engineOsc.type = 'sawtooth';
         engineGain = audioCtx.createGain();
@@ -438,7 +818,6 @@
         engineOsc.start(); 
         engineGain.gain.value = 0;
 
-        // --- タイヤ摩擦音 ---
         skidOsc = audioCtx.createOscillator();
         skidOsc.type = 'sawtooth'; 
         skidOsc.frequency.value = 800;
@@ -516,11 +895,8 @@
             let slip = slips[i] || 0;
             if (slip > maxSlip) maxSlip = slip;
             
-            if (slip > 0.1) {
-                tireHeat[i] = Math.min(1.0, tireHeat[i] + 0.01);
-            } else {
-                tireHeat[i] = Math.max(0.0, tireHeat[i] - 0.005);
-            }
+            if (slip > 0.1) tireHeat[i] = Math.min(1.0, tireHeat[i] + 0.01);
+            else tireHeat[i] = Math.max(0.0, tireHeat[i] - 0.005);
         }
         let maxHeat = Math.max(...tireHeat);
 
@@ -556,11 +932,14 @@
         skidGain.gain.setTargetAtTime(targetSkidGain, audioCtx.currentTime, 0.05);
     }
 
+    // ==========================================
+    // 入力・操作制御
+    // ==========================================
     let inputSteer = 0, inputAccel = 0, inputBrake = 0;
     let touchControl = { active: false, id: null, startX: 0, startY: 0, currentX: 0, currentY: 0 };
     const UI_RADIUS = 100;
 
-    function getUICenter() { return { x: canvas.width / 2, y: canvas.height - 150 }; }
+    function getUICenter() { return { x: window.innerWidth / 2, y: window.innerHeight - 150 }; }
 
     function updateInputs() {
         if (raceState !== 'RACING') {
@@ -585,6 +964,7 @@
                 touchControl.active = true; touchControl.id = e.pointerId;
                 touchControl.startX = center.x; touchControl.startY = center.y;
                 touchControl.currentX = e.clientX; touchControl.currentY = e.clientY;
+                document.getElementById('joystick-base').classList.add('active-joystick');
                 updateInputs();
             }
         }
@@ -595,13 +975,22 @@
         }
     }
     function handlePointerUp(e) {
-        if (touchControl.active && e.pointerId === touchControl.id) { touchControl.active = false; }
+        if (touchControl.active && e.pointerId === touchControl.id) { 
+            touchControl.active = false; 
+            document.getElementById('joystick-base').classList.remove('active-joystick');
+            updateInputs();
+        }
     }
-    canvas.addEventListener('pointerdown', handlePointerDown);
-    canvas.addEventListener('pointermove', handlePointerMove);
+    
+    // 操作イベントはウィンドウに対して付与する
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('pointercancel', handlePointerUp);
 
+    // ==========================================
+    // 物理演算
+    // ==========================================
     let state = [0, 0, 0, 0.1, 0, 0];
     let prev_ax = 0, prev_ay = 0, loads = [0, 0, 0, 0];
 
@@ -637,20 +1026,16 @@
         if (car.driveType === 'FF') { Fx_fl = engineForce * 0.5; Fx_fr = engineForce * 0.5; } 
         else if (car.driveType === 'FR') { Fx_rl = engineForce * 0.5; Fx_rr = engineForce * 0.5; }
 
-        // 制動力の配分
         let b_fl = brakeForce * car.brakeBias * 0.5;
         let b_fr = brakeForce * car.brakeBias * 0.5;
         let b_rl = brakeForce * (1 - car.brakeBias) * 0.5;
         let b_rr = brakeForce * (1 - car.brakeBias) * 0.5;
 
-        // --- ABS実装追加 ---
         if (absEnabled && brakeInput > 0 && Math.abs(u) > 2.0) {
             let t_ms = performance.now();
-            // タイヤごとの制動力を監視し、ロックを防ぐためのポンピング関数
             let applyABS = (bForce, Fz) => {
-                let maxBrake = car.mu * Fz * 0.95; // 限界グリップの95%をロック閾値とする
+                let maxBrake = car.mu * Fz * 0.95; 
                 if (bForce > maxBrake) {
-                    // 約15Hzの周期(66ms)でブレーキ力を抜き、タイヤのロック（滑りっぱなし）を防ぐ
                     let absPulse = (t_ms % 66) < 33; 
                     return absPulse ? maxBrake : bForce * 0.3; 
                 }
@@ -661,7 +1046,6 @@
             b_rl = applyABS(b_rl, Fz_rl);
             b_rr = applyABS(b_rr, Fz_rr);
         }
-        // -------------------
 
         Fx_fl -= b_fl * Math.sign(u); 
         Fx_fr -= b_fr * Math.sign(u);
@@ -686,11 +1070,9 @@
         function calcSlipFactor(alpha, Fz, Fx, C_alpha_param) {
             let max_F = car.mu * Fz;
             if (max_F <= 0.01) return 0;
-            
             let Fy_linear = C_alpha_param * Math.abs(alpha) * (Fz / (car.mass * g / 4));
             let slipRatio = Fy_linear / max_F;
             if (Math.abs(Fx) > max_F * 0.9) slipRatio += 0.5; 
-            
             let slip = Math.max(0, slipRatio - 0.95); 
             let loadFactor = Fz / (car.mass * g / 4);
             return slip * loadFactor;
@@ -727,87 +1109,6 @@
         let k4 = getDerivatives(state_k4, inputSteer, inputAccel, inputBrake, prev_ax, prev_ay);
 
         for (let i = 0; i < state.length; i++) state[i] += (k1[i] + 2*k2[i] + 2*k3[i] + k4[i]) * dt / 6;
-
-        let currentG = { x: -prev_ay / g, y: -prev_ax / g };
-        displayG.x += (currentG.x - displayG.x) * 0.15; 
-        displayG.y += (currentG.y - displayG.y) * 0.15;
-    }
-
-    let skidMarks = [];
-    let prevTirePos = [null, null, null, null];
-    let particles = [];
-
-    function spawnSmoke(wX, wY, slip) {
-        if (Math.random() > slip * 1.5) return; 
-        particles.push({
-            x: wX, y: wY,
-            vx: (Math.random() - 0.5) * 0.8,
-            vy: (Math.random() - 0.5) * 0.8,
-            life: 1.0,
-            size: (2 + Math.random() * 4) * SCALE / 12,
-            growth: 0.1 + Math.random() * 0.2
-        });
-    }
-
-    function updateAndDrawParticles(ctx) {
-        ctx.save();
-        for (let i = particles.length - 1; i >= 0; i--) {
-            let p = particles[i];
-            p.x += p.vx; p.y += p.vy;
-            p.life -= 0.025;
-            p.size += p.growth; 
-            
-            if (p.life <= 0) {
-                particles.splice(i, 1);
-            } else {
-                let alpha = p.life * 0.06;
-                ctx.fillStyle = `rgba(200, 200, 200, ${alpha})`;
-                ctx.beginPath(); 
-                ctx.arc(p.x * SCALE, p.y * SCALE, p.size * SCALE, 0, Math.PI * 2); 
-                ctx.fill();
-            }
-        }
-        ctx.restore();
-    }
-
-    function updateEffects(carState, slips) {
-        if (!currentCar || (raceState !== 'RACING' && raceState !== 'REPLAY')) return;
-        const offsets = [
-            {x: currentCar.lf, y: -currentCar.T/2}, {x: currentCar.lf, y: currentCar.T/2},
-            {x: -currentCar.lr, y: -currentCar.T/2}, {x: -currentCar.lr, y: currentCar.T/2}
-        ];
-        
-        let yaw = carState[2]; 
-        let speed = Math.abs(carState[3] !== undefined ? carState[3] : carState[6]); 
-        
-        for(let i=0; i<4; i++) {
-            let slip = slips[i] || 0;
-            if (slip > 0.05 && speed > 3.0) { 
-                let wX = carState[0] + offsets[i].x * Math.cos(yaw) - offsets[i].y * Math.sin(yaw);
-                let wY = carState[1] + offsets[i].x * Math.sin(yaw) + offsets[i].y * Math.cos(yaw);
-                
-                if (prevTirePos[i]) {
-                    skidMarks.push({ p1: {x: prevTirePos[i].x, y: prevTirePos[i].y}, p2: {x: wX, y: wY}, life: 1.0, intensity: Math.min(1.0, slip * 1.5) });
-                }
-                prevTirePos[i] = {x: wX, y: wY};
-                
-                if (slip > 0.2) spawnSmoke(wX, wY, slip);
-            } else { prevTirePos[i] = null; }
-        }
-        skidMarks.forEach(sm => sm.life -= 0.003); 
-        skidMarks = skidMarks.filter(sm => sm.life > 0);
-        if (skidMarks.length > 600) skidMarks.splice(0, skidMarks.length - 600); 
-    }
-
-    function drawSkidMarks(ctx) {
-        ctx.save(); ctx.lineCap = 'round'; 
-        for(let sm of skidMarks) {
-            let alpha = Math.max(0, sm.life * sm.intensity * 0.85); 
-            ctx.lineWidth = (0.2 + sm.intensity * 0.5) * SCALE; 
-            ctx.strokeStyle = `rgba(15, 15, 15, ${alpha})`; 
-            ctx.beginPath(); ctx.moveTo(sm.p1.x * SCALE, sm.p1.y * SCALE); ctx.lineTo(sm.p2.x * SCALE, sm.p2.y * SCALE); ctx.stroke();
-        }
-        ctx.restore();
     }
 
     function interpolateData(t, data) {
@@ -874,128 +1175,6 @@
         }
     }
 
-    let carDisplayX = 0, carDisplayY = 0;
-
-    function drawRecordedCar(ctx, carType, gState, isGhost) {
-        ctx.save(); ctx.translate(gState[1] * SCALE, gState[2] * SCALE); ctx.rotate(gState[3]);
-        ctx.globalAlpha = isGhost ? 0.4 : 1.0;
-        
-        const { lf, lr, T, id } = carType;
-        const carW = 1.8 * SCALE; const carL = (lf + lr) * SCALE + 1.8 * SCALE; const carRearX = -lr * SCALE - 0.9 * SCALE;
-
-        if (isGhost) ctx.fillStyle = '#00FFFF';
-        else ctx.fillStyle = id === 'Retro_FR' ? '#FFFFFF' : '#F5F5F5'; 
-        ctx.fillRect(carRearX, -carW/2, carL, carW);
-        
-        if (id === 'Retro_FR' && !isGhost) {
-            ctx.fillStyle = '#222'; ctx.fillRect(carRearX, -carW/2, carL, 2); ctx.fillRect(carRearX, carW/2 - 2, carL, 2);
-        }
-        if (!isGhost) {
-            ctx.fillStyle = '#222222'; ctx.fillRect(0.2 * SCALE, -carW/2 + 2, 0.9 * SCALE, carW - 4); 
-            ctx.strokeStyle = '#CCCCCC'; ctx.lineWidth = 1; ctx.strokeRect(carRearX, -carW/2, carL, carW);
-        }
-
-        const tireW = 0.4 * SCALE, tireL = 0.8 * SCALE;
-        const drawTire = (oX, oY, stA) => {
-            ctx.save(); ctx.translate(oX * SCALE, oY * SCALE); ctx.rotate(stA);
-            ctx.fillStyle = `rgba(20, 20, 20, 0.8)`; ctx.fillRect(-tireL/2, -tireW/2, tireL, tireW); ctx.restore();
-        };
-        let delta = gState[4] * (Math.PI / 5);
-        drawTire(lf, -T/2, delta); drawTire(lf, T/2, delta); drawTire(-lr, -T/2, 0); drawTire(-lr, T/2, 0);
-
-        if (gState[5] > 0) { 
-            ctx.fillStyle = '#FF0000'; ctx.shadowColor = '#FF0000'; ctx.shadowBlur = 10; 
-            ctx.fillRect(carRearX, -carW/2 + 0.1 * SCALE, 0.4 * SCALE, 0.5 * SCALE);
-            ctx.fillRect(carRearX, carW/2 - 0.6 * SCALE, 0.4 * SCALE, 0.5 * SCALE);
-            ctx.shadowBlur = 0; 
-        }
-        ctx.restore();
-    }
-
-    function drawCarFixed() {
-        if (!currentCar) return;
-        const { lf, lr, T, mass, id } = currentCar;
-        const carW = 1.8 * SCALE; const carL = (lf + lr) * SCALE + 1.8 * SCALE; const carRearX = -lr * SCALE - 0.9 * SCALE;
-
-        ctx.fillStyle = id === 'Retro_FR' ? '#FFFFFF' : '#F5F5F5'; ctx.fillRect(carRearX, -carW/2, carL, carW);
-        if (id === 'Retro_FR') { ctx.fillStyle = '#222'; ctx.fillRect(carRearX, -carW/2, carL, 2); ctx.fillRect(carRearX, carW/2 - 2, carL, 2); }
-        ctx.fillStyle = '#222222'; ctx.fillRect(0.2 * SCALE, -carW/2 + 2, 0.9 * SCALE, carW - 4); 
-        ctx.strokeStyle = '#CCCCCC'; ctx.lineWidth = 1; ctx.strokeRect(carRearX, -carW/2, carL, carW);
-
-        const tireW = 0.4 * SCALE, tireL = 0.8 * SCALE;
-        const drawTire = (oX, oY, stA, load) => {
-            ctx.save(); ctx.translate(oX * SCALE, oY * SCALE); ctx.rotate(stA);
-            let alpha = Math.max(0.2, Math.min(1.0, (load / (mass * g / 4)) * 0.8));
-            ctx.fillStyle = `rgba(20, 20, 20, ${alpha})`; ctx.fillRect(-tireL/2, -tireW/2, tireL, tireW);
-            ctx.strokeStyle = '#000'; ctx.strokeRect(-tireL/2, -tireW/2, tireL, tireW); ctx.restore();
-        };
-        let delta = inputSteer * (Math.PI / 5);
-        drawTire(lf, -T/2, delta, loads[0]); drawTire(lf, T/2, delta, loads[1]); drawTire(-lr, -T/2, 0, loads[2]); drawTire(-lr, T/2, 0, loads[3]);
-
-        if (inputBrake > 0) {
-            ctx.fillStyle = '#FF0000'; ctx.shadowColor = '#FF0000'; ctx.shadowBlur = 15; 
-            ctx.fillRect(carRearX, -carW/2 + 0.1 * SCALE, 0.4 * SCALE, 0.5 * SCALE);
-            ctx.fillRect(carRearX, carW/2 - 0.6 * SCALE, 0.4 * SCALE, 0.5 * SCALE);
-            ctx.shadowBlur = 0; 
-        }
-    }
-
-    function drawNavigationArrow() {
-        if (raceState !== 'RACING' || !currentCourse) return;
-        let gate = currentCourse.gates[nextGateIndex];
-        let dx = gate.cx - state[0]; let dy = gate.cy - state[1]; let dist = Math.hypot(dx, dy);
-        if (dist < 30) {
-            let nextTargetIndex = (nextGateIndex + 1) % currentCourse.gates.length;
-            let nextGate = currentCourse.gates[nextTargetIndex];
-            dx = nextGate.cx - state[0]; dy = nextGate.cy - state[1];
-        }
-        let relAngle = Math.atan2(dy, dx) - state[2];
-        
-        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.translate(carDisplayX, carDisplayY); ctx.rotate(relAngle); ctx.translate(0, -120);
-        ctx.fillStyle = `rgba(255, 215, 0, 0.8)`; ctx.beginPath(); 
-        ctx.moveTo(0, -15); ctx.lineTo(12, 12); ctx.lineTo(-12, 12); ctx.closePath();
-        ctx.fill(); ctx.strokeStyle = `rgba(0,0,0,0.5)`; ctx.lineWidth=2; ctx.stroke();
-        ctx.restore();
-    }
-
-    function drawUI() {
-        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-        const center = getUICenter();
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'; ctx.beginPath(); ctx.arc(center.x, center.y, UI_RADIUS, 0, Math.PI*2); ctx.fill();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; ctx.lineWidth = 2; ctx.stroke();
-        
-        let posX = center.x + inputSteer * UI_RADIUS, posY = center.y;
-        if (inputAccel > 0) posY -= inputAccel * UI_RADIUS;
-        if (inputBrake > 0) posY += inputBrake * UI_RADIUS;
-        
-        if (inputAccel > 0) ctx.fillStyle = 'rgba(100, 255, 100, 0.9)';
-        else if (inputBrake > 0) ctx.fillStyle = 'rgba(255, 100, 100, 0.9)';
-        else ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.beginPath(); ctx.arc(posX, posY, 25, 0, Math.PI*2); ctx.fill();
-        ctx.restore();
-    }
-
-    function drawGMeter() {
-        const r = 40; const cx = canvas.width - r - 20; const cy = canvas.height - r - 20;
-        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy); ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r); ctx.stroke();
-        ctx.beginPath(); ctx.arc(cx, cy, r * 0.5, 0, Math.PI * 2); ctx.stroke();
-
-        const maxG = 2.0;
-        let bx = cx + (displayG.x / maxG) * r; let by = cy + (displayG.y / maxG) * r;
-        let dist = Math.hypot(bx - cx, by - cy);
-        if (dist > r) { bx = cx + ((bx - cx) / dist) * r; by = cy + ((by - cy) / dist) * r; }
-
-        ctx.fillStyle = '#FFD700'; ctx.shadowColor = '#FFD700'; ctx.shadowBlur = 8;
-        ctx.beginPath(); ctx.arc(bx, by, 5, 0, Math.PI * 2); ctx.fill();
-        ctx.shadowBlur = 0; ctx.fillStyle = 'white'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
-        ctx.fillText(Math.hypot(displayG.x, displayG.y).toFixed(2) + ' G', cx, cy - r - 5);
-        ctx.restore();
-    }
-
     function updateHUD() {
         document.getElementById('speed-disp').innerText = Math.abs(Math.round(state[3] * 3.6));
         if (raceState === 'RACING') {
@@ -1008,23 +1187,35 @@
     // フロー管理
     // ==========================================
     window.startGame = function(courseId) {
+        if (!scene) initThreeJS();
+
         if (!isAudioInitialized) initAudio();
         else if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
         
         currentCar = carsData[selectedCarId];
         currentCourseId = courseId;
         currentCourse = courses[courseId];
+        
+        // 3Dコース（ゲートと道路）のセットアップ
+        setupCourse3D(currentCourse);
+
+        // 車の3Dモデルを再構築
+        carMesh.clear();
+        ghostMesh.clear();
+        buildCarModel(carMesh, currentCar.id, false);
+        buildCarModel(ghostMesh, currentCar.id, true);
+
         state = [...currentCourse.startState];
         prev_ax = 0; prev_ay = 0;
         inputSteer = 0; inputAccel = 0; inputBrake = 0; touchControl.active = false;
         
-        // ABSの状態を取得
         absEnabled = document.getElementById('abs-toggle').checked;
         
         currentLap = 0; nextGateIndex = 0; lapTimes = [];
-        skidMarks = []; prevTirePos = [null, null, null, null]; particles = [];
-        displayG = { x: 0, y: 0 }; tireSlips = [0, 0, 0, 0];
+        tireSlips = [0, 0, 0, 0];
         isTiming = false; currentRunData = []; tireHeat = [0, 0, 0, 0];
+        
+        clearSmoke(); // 古い煙をリセット
 
         const ghostKey = `ds_ghost_${currentCar.id}_${currentCourseId}`;
         const ghostStr = localStorage.getItem(ghostKey);
@@ -1036,6 +1227,7 @@
         document.getElementById('result-layer').classList.add('hidden');
         document.getElementById('replay-ui').classList.add('hidden');
         document.getElementById('ui-layer').classList.remove('hidden');
+        document.getElementById('joystick-base').classList.remove('hidden');
         document.getElementById('hud-layer').classList.remove('hidden');
         
         raceState = 'RACING'; showFlashMessage("GET READY!");
@@ -1044,6 +1236,7 @@
     window.showResult = function() {
         raceState = 'FINISHED'; isTiming = false; 
         document.getElementById('ui-layer').classList.add('hidden');
+        document.getElementById('joystick-base').classList.add('hidden');
         document.getElementById('hud-layer').classList.add('hidden');
         
         let html = ""; let total = lapTimes.reduce((a, b) => a + b, 0);
@@ -1076,18 +1269,18 @@
         setTimeout(() => document.getElementById('result-layer').classList.remove('hidden'), 1500);
     }
 
-    // --- Facebookシェア機能追加 ---
     window.shareOnFacebook = function() {
-        // キャンバスの画像をダウンロードする
-        const dataUrl = canvas.toDataURL("image/png");
-        const a = document.createElement('a');
-        a.href = dataUrl;
-        a.download = `DrivingSimulator_Result_${currentCourse.name}.png`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        const canvasElement = document.getElementById('gameCanvas');
+        if(canvasElement) {
+            const dataUrl = canvasElement.toDataURL("image/png");
+            const a = document.createElement('a');
+            a.href = dataUrl;
+            a.download = `3DDrivingSimulator_Result_${currentCourse.name}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
 
-        // テキストをクリップボードにコピー
         let total = lapTimes.reduce((acc, val) => acc + val, 0);
         let text = `${currentCar.id}で${currentCourse.name}を${formatTime(total)}でクリア！\nhttps://yudai1966.github.io/drivingSimulator/`;
         
@@ -1107,16 +1300,15 @@
             window.open("https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent("https://yudai1966.github.io/drivingSimulator/"), "_blank");
         }, 1500);
     };
-    // ----------------------------
 
     window.startReplay = function() {
         if (!currentRunData || currentRunData.length === 0) return;
         raceState = 'REPLAY';
         document.getElementById('result-layer').classList.add('hidden');
         document.getElementById('replay-ui').classList.remove('hidden');
+        clearSmoke();
         replayStartTime = performance.now();
         replayTotalTime = currentRunData[currentRunData.length - 1][0]; 
-        skidMarks = []; particles = [];
     }
 
     window.endReplay = function() {
@@ -1133,8 +1325,26 @@
     }
 
     // ==========================================
-    // メインループ
+    // メインループ (Three.js 描画対応)
     // ==========================================
+    
+    // カメラを車に追従させる関数
+    function updateCamera(carPosX, carPosZ, carYaw) {
+        const camDist = 12; // 車からどれだけ離すか
+        const camHeight = 5; // カメラの高さ
+        
+        // 車の後方にカメラを配置
+        const camX = carPosX - camDist * Math.cos(carYaw);
+        const camZ = carPosZ - camDist * Math.sin(carYaw);
+        
+        camera.position.set(camX, camHeight, camZ);
+        
+        // 車の少し前方を注視させる
+        const lookX = carPosX + 5 * Math.cos(carYaw);
+        const lookZ = carPosZ + 5 * Math.sin(carYaw);
+        camera.lookAt(lookX, 0.5, lookZ);
+    }
+
     function loop() {
         if (raceState === 'REPLAY') {
             let t = performance.now() - replayStartTime;
@@ -1147,27 +1357,27 @@
             let rState = interpolateData(t, currentRunData);
             if (!rState) { requestAnimationFrame(loop); return; }
 
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.save();
-            ctx.translate(canvas.width / 2, canvas.height / 2);
+            // プレイヤー車の3D座標・回転更新 (X, Y -> X, Z)
+            carMesh.position.set(rState[1], 0.5, rState[2]);
+            carMesh.rotation.y = -rState[3]; // Three.jsはY軸回転（逆向き）
             
-            let zoom = Math.min(canvas.width / 200, canvas.height / 200) / SCALE * 3.5;
-            ctx.scale(zoom, zoom);
-            ctx.translate(-rState[1] * SCALE, -rState[2] * SCALE);
-
-            currentCourse.draw(ctx);
-            
-            updateEffects(rState, [rState[8], rState[9], rState[10], rState[11]]);
-            drawSkidMarks(ctx); 
-            updateAndDrawParticles(ctx);
+            // 煙エフェクトの発生 (rStateのインデックスに注意: 1=x, 2=y, 3=yaw, 8~11=slips)
+            handleSmokeEmissions([rState[1], rState[2], rState[3]], [rState[8], rState[9], rState[10], rState[11]], currentCar);
 
             if (ghostData) {
                 let gState = interpolateData(t, ghostData);
-                if (gState) drawRecordedCar(ctx, currentCar, gState, true);
+                if (gState) {
+                    ghostMesh.visible = true;
+                    ghostMesh.position.set(gState[1], 0.5, gState[2]);
+                    ghostMesh.rotation.y = -gState[3];
+                } else {
+                    ghostMesh.visible = false;
+                }
             }
 
-            drawRecordedCar(ctx, currentCar, rState, false);
-            ctx.restore();
+            updateCamera(rState[1], rState[2], rState[3]);
+            updateSmoke(1/60); // 煙のアニメーション更新
+            if (renderer && scene && camera) renderer.render(scene, camera);
 
             updateAudio(Math.abs(rState[6]), rState[7], rState[5], [rState[8], rState[9], rState[10], rState[11]]);
             requestAnimationFrame(loop);
@@ -1175,42 +1385,66 @@
         }
 
         if (raceState === 'RACING' || raceState === 'FINISHED') {
-            updateInputs(); prevCarPos = {x: state[0], y: state[1]}; stepRK4(1/60); 
+            updateInputs(); 
+            
+            // 入力に合わせてノブの位置と色を更新
+            const knob = document.getElementById('joystick-knob');
+            if (knob) {
+                let jx = inputSteer * UI_RADIUS;
+                let jy = 0;
+                if (inputAccel > 0) jy = -inputAccel * UI_RADIUS;
+                if (inputBrake > 0) jy = inputBrake * UI_RADIUS;
+                knob.style.transform = `translate(${jx}px, ${jy}px)`;
+                
+                if (inputAccel > 0) knob.style.backgroundColor = 'rgba(100, 255, 100, 0.9)';
+                else if (inputBrake > 0) knob.style.backgroundColor = 'rgba(255, 100, 100, 0.9)';
+                else knob.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+            }
+
+            prevCarPos = {x: state[0], y: state[1]}; 
+            stepRK4(1/60); 
             
             if (raceState === 'RACING' && isTiming) {
                 let t = performance.now() - raceStartTime;
                 currentRunData.push([t, state[0], state[1], state[2], inputSteer, inputBrake, state[3], inputAccel, tireSlips[0], tireSlips[1], tireSlips[2], tireSlips[3]]);
             }
             
-            updateEffects(state, tireSlips); 
+            // 煙エフェクトの発生
+            handleSmokeEmissions(state, tireSlips, currentCar);
             
             if (raceState === 'RACING') checkGates(prevCarPos, {x: state[0], y: state[1]});
             updateAudio(Math.abs(state[3]), inputAccel, inputBrake, tireSlips);
         }
         
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const uiCenter = getUICenter(); carDisplayX = uiCenter.x; carDisplayY = uiCenter.y;
-        
-        if (currentCourse) {
-            ctx.save();
-            ctx.translate(carDisplayX, carDisplayY); ctx.rotate(-state[2] - Math.PI / 2); ctx.translate(-state[0] * SCALE, -state[1] * SCALE);
-            
-            currentCourse.draw(ctx); 
-            drawSkidMarks(ctx); 
-            updateAndDrawParticles(ctx);
+        if (currentCourse && carMesh) {
+            // プレイヤー車の3D座標・回転更新
+            carMesh.position.set(state[0], 0.5, state[1]);
+            carMesh.rotation.y = -state[2];
 
             if (ghostData && raceState === 'RACING' && isTiming) {
                 let t = performance.now() - raceStartTime;
                 let gState = interpolateData(t, ghostData);
-                if (gState) drawRecordedCar(ctx, currentCar, gState, true);
+                if (gState) {
+                    ghostMesh.visible = true;
+                    ghostMesh.position.set(gState[1], 0.5, gState[2]);
+                    ghostMesh.rotation.y = -gState[3];
+                } else {
+                    ghostMesh.visible = false;
+                }
+            } else {
+                ghostMesh.visible = false;
             }
-            ctx.restore();
-            
-            ctx.save(); ctx.translate(carDisplayX, carDisplayY); ctx.rotate(-Math.PI / 2); drawCarFixed(); ctx.restore();
-            
-            drawNavigationArrow(); updateHUD();
-            if (raceState === 'RACING' || raceState === 'FINISHED') { drawUI(); drawGMeter(); }
+
+            updateCamera(state[0], state[1], state[2]);
+            updateHUD();
         }
+        
+        updateSmoke(1/60); // 煙のアニメーション更新
+        
+        if (renderer && scene && camera) {
+            renderer.render(scene, camera);
+        }
+        
         requestAnimationFrame(loop);
     }
     
