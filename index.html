@@ -141,12 +141,14 @@
                 Retro_FR<br><span style="font-size: 0.8rem; font-weight: normal;">(FR / ドリフト志向)</span>
             </button>
             
+            <!-- --- ABS実装追加 --- -->
             <div style="margin-top: 15px; color: #ccc; font-size: 0.9rem;">
                 <label style="cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
                     <input type="checkbox" id="abs-toggle" checked style="width: 18px; height: 18px;">
                     <span>ABS (アンチロックブレーキシステム)</span>
                 </label>
             </div>
+            <!-- ------------------- -->
         </div>
 
         <div class="courses-wrapper">
@@ -181,10 +183,14 @@
         <h2 style="font-size: 3rem; color: #FFD700; margin-bottom: 0;">GOAL!</h2>
         <div id="result-details"></div>
         <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px; width: 100%; max-width: 300px;">
+            
+            <!-- --- Facebookシェア機能追加 --- -->
             <button class="course-btn facebook-btn" style="margin: 0;" onclick="shareOnFacebook()">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
                 Facebookでシェア
             </button>
+            <!-- ---------------------------- -->
+
             <button class="course-btn" style="background: #1E90FF; margin: 0;" onclick="startReplay()">リプレイを見る</button>
             <button class="course-btn" style="background: #666; margin: 0;" onclick="backToMenu()">メニューへ</button>
         </div>
@@ -1230,6 +1236,10 @@
         document.getElementById('joystick-base').classList.remove('hidden');
         document.getElementById('hud-layer').classList.remove('hidden');
         
+        // --- フレームレート独立化のための初期化 ---
+        lastFrameTime = performance.now();
+        physicsAccumulator = 0;
+
         raceState = 'RACING'; showFlashMessage("GET READY!");
     }
 
@@ -1309,6 +1319,9 @@
         clearSmoke();
         replayStartTime = performance.now();
         replayTotalTime = currentRunData[currentRunData.length - 1][0]; 
+        
+        // リプレイ時も時間をリセット
+        lastFrameTime = performance.now();
     }
 
     window.endReplay = function() {
@@ -1345,7 +1358,20 @@
         camera.lookAt(lookX, 0.5, lookZ);
     }
 
-    function loop() {
+    let lastFrameTime = performance.now();
+    let physicsAccumulator = 0;
+    const FIXED_TIME_STEP = 1 / 60; // 物理エンジンの更新間隔 (固定)
+
+    function loop(currentTime) {
+        if (!currentTime) currentTime = performance.now();
+        
+        // 前フレームからの経過時間(秒)を計算
+        let frameTime = (currentTime - lastFrameTime) / 1000;
+        lastFrameTime = currentTime;
+        
+        // バックグラウンドに回った時など、巨大な時間が経った場合はキャップをかける
+        if (frameTime > 0.1) frameTime = 0.1;
+
         if (raceState === 'REPLAY') {
             let t = performance.now() - replayStartTime;
             if (t > replayTotalTime + 2000) { 
@@ -1376,7 +1402,7 @@
             }
 
             updateCamera(rState[1], rState[2], rState[3]);
-            updateSmoke(1/60); // 煙のアニメーション更新
+            updateSmoke(frameTime); // 実時間に基づいて煙のアニメーション更新
             if (renderer && scene && camera) renderer.render(scene, camera);
 
             updateAudio(Math.abs(rState[6]), rState[7], rState[5], [rState[8], rState[9], rState[10], rState[11]]);
@@ -1401,8 +1427,18 @@
                 else knob.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
             }
 
-            prevCarPos = {x: state[0], y: state[1]}; 
-            stepRK4(1/60); 
+            // --- 物理演算の Fixed Time Step 対応 ---
+            physicsAccumulator += frameTime;
+            
+            // フレーム間の経過時間分だけ、1/60秒ずつ物理エンジンを進める
+            while (physicsAccumulator >= FIXED_TIME_STEP) {
+                prevCarPos = {x: state[0], y: state[1]}; 
+                stepRK4(FIXED_TIME_STEP); 
+                
+                if (raceState === 'RACING') checkGates(prevCarPos, {x: state[0], y: state[1]});
+                
+                physicsAccumulator -= FIXED_TIME_STEP;
+            }
             
             if (raceState === 'RACING' && isTiming) {
                 let t = performance.now() - raceStartTime;
@@ -1412,7 +1448,6 @@
             // 煙エフェクトの発生
             handleSmokeEmissions(state, tireSlips, currentCar);
             
-            if (raceState === 'RACING') checkGates(prevCarPos, {x: state[0], y: state[1]});
             updateAudio(Math.abs(state[3]), inputAccel, inputBrake, tireSlips);
         }
         
@@ -1439,7 +1474,7 @@
             updateHUD();
         }
         
-        updateSmoke(1/60); // 煙のアニメーション更新
+        updateSmoke(frameTime); // 実時間に基づいて煙のアニメーション更新
         
         if (renderer && scene && camera) {
             renderer.render(scene, camera);
