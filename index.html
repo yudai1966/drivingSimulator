@@ -44,6 +44,59 @@
             transform: scale(1.05);
         }
 
+        .tuning-panel {
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            text-align: left;
+            font-size: 0.85rem;
+            color: #ddd;
+        }
+        .tuning-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            color: #FFD700;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+        .tuning-reset-btn {
+            background: #444;
+            color: #fff;
+            border: 1px solid #888;
+            border-radius: 5px;
+            padding: 2px 8px;
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+        .tuning-reset-btn:active { transform: scale(0.95); }
+        .tuning-row {
+            margin-bottom: 10px;
+        }
+        .tuning-label-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+        }
+        .tuning-val-badge {
+            font-family: monospace;
+            font-weight: bold;
+            color: #90caf9;
+        }
+        .tuning-slider {
+            width: 100%;
+            cursor: pointer;
+            accent-color: #1E90FF;
+            margin: 2px 0;
+        }
+        .tuning-scale {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            color: #aaa;
+        }
+
         .courses-wrapper {
             display: flex; flex-direction: column; width: 100%; max-width: 400px; gap: 20px;
         }
@@ -109,6 +162,68 @@
             background-color: rgba(255, 255, 255, 0.9);
         }
 
+        #speedometer-bottom {
+            position: absolute; bottom: 35px; right: 25px;
+            background: rgba(15, 20, 28, 0.82);
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            border-radius: 14px;
+            padding: 10px 18px;
+            color: white;
+            font-family: monospace;
+            text-align: right;
+            pointer-events: none;
+            z-index: 10;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6), inset 0 0 12px rgba(30, 144, 255, 0.2);
+            min-width: 125px;
+        }
+        #speedometer-bottom .speed-label {
+            font-size: 0.72rem;
+            color: #90caf9;
+            letter-spacing: 2px;
+            text-align: left;
+            margin-bottom: 2px;
+        }
+        #speedometer-bottom .speed-main {
+            display: flex;
+            align-items: baseline;
+            justify-content: flex-end;
+            gap: 6px;
+        }
+        #speed-disp-bottom {
+            font-size: 2.6rem;
+            font-weight: bold;
+            color: #ffffff;
+            text-shadow: 0 0 10px rgba(30, 144, 255, 0.9);
+            line-height: 1;
+        }
+        #speedometer-bottom .speed-unit {
+            font-size: 0.95rem;
+            color: #FFD700;
+            font-weight: bold;
+        }
+        #speed-bar-bg {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 3px;
+            margin-top: 7px;
+            overflow: hidden;
+        }
+        #speed-bar-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #00e5ff, #00e676, #ffea00, #ff1744);
+            transition: width 0.05s linear;
+        }
+        @media (max-width: 600px) {
+            #speedometer-bottom {
+                bottom: 20px; right: 12px;
+                padding: 8px 12px;
+                min-width: 95px;
+            }
+            #speed-disp-bottom { font-size: 2.0rem; }
+        }
+
         #hud-layer {
             position: absolute; top: 10px; right: 20px;
             color: white; text-align: right; text-shadow: 1px 1px 2px black;
@@ -149,6 +264,35 @@
                 </label>
             </div>
             <!-- ------------------- -->
+
+            <div class="tuning-panel">
+                <div class="tuning-header">
+                    <span>ALIGNMENT TUNING (トー角調整)</span>
+                    <button type="button" class="tuning-reset-btn" onclick="resetToeTuning()">初期値に戻す</button>
+                </div>
+                <div class="tuning-row">
+                    <div class="tuning-label-row">
+                        <span>フロント トー角 (片輪)</span>
+                        <span id="front-toe-disp" class="tuning-val-badge">IN +0.30°</span>
+                    </div>
+                    <input type="range" id="front-toe-slider" class="tuning-slider" min="-1.0" max="1.0" step="0.05" value="0.30" oninput="updateToeUI()">
+                    <div class="tuning-scale">
+                        <span>◀ OUT (-1.0°) 初期応答重視</span>
+                        <span>IN (+1.0°) 直進安定重視 ▶</span>
+                    </div>
+                </div>
+                <div class="tuning-row" style="margin-bottom: 2px;">
+                    <div class="tuning-label-row">
+                        <span>リア トー角 (片輪)</span>
+                        <span id="rear-toe-disp" class="tuning-val-badge">IN +0.45°</span>
+                    </div>
+                    <input type="range" id="rear-toe-slider" class="tuning-slider" min="-1.0" max="1.0" step="0.05" value="0.45" oninput="updateToeUI()">
+                    <div class="tuning-scale">
+                        <span>◀ OUT (-1.0°) 回頭・旋回重視</span>
+                        <span>IN (+1.0°) リア安定重視 ▶</span>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="courses-wrapper">
@@ -215,6 +359,18 @@
         <div id="joystick-knob"></div>
     </div>
 
+    <!-- 画面下部のスピードメーター -->
+    <div id="speedometer-bottom" class="hidden">
+        <div class="speed-label">SPEED</div>
+        <div class="speed-main">
+            <span id="speed-disp-bottom">0</span>
+            <span class="speed-unit">km/h</span>
+        </div>
+        <div id="speed-bar-bg">
+            <div id="speed-bar-fill"></div>
+        </div>
+    </div>
+
     <div id="hud-layer" class="hidden">
         <div id="hud-lap">LAP: 1 / 3</div>
         <div id="hud-time">TIME: 00:00.000</div>
@@ -225,15 +381,36 @@
 
 <script>
     // ==========================================
-    // Three.js 初期化とセットアップ
+    // Three.js 初期化とリアル環境セットアップ
     // ==========================================
-    let scene, camera, renderer, carMesh, ghostMesh;
+    let scene, camera, renderer, dirLight, carMesh, ghostMesh;
     let gateMeshes = []; // コース上の全てのオブジェクトを管理
+    let wheelAngle = 0;  // タイヤの回転角
+
+    function createGrassTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 256; canvas.height = 256;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#2e7d32';
+        ctx.fillRect(0, 0, 256, 256);
+        ctx.fillStyle = '#276c2b';
+        ctx.fillRect(0, 0, 128, 256);
+        for (let i = 0; i < 6000; i++) {
+            ctx.fillStyle = Math.random() > 0.5 ? 'rgba(80, 170, 60, 0.25)' : 'rgba(20, 70, 20, 0.25)';
+            ctx.fillRect(Math.random() * 256, Math.random() * 256, 3, 3);
+        }
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(80, 80);
+        return tex;
+    }
 
     function initThreeJS() {
-        // シーン
+        // シーンとフォグ
         scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87CEEB); // 空色
+        scene.background = new THREE.Color(0x7ec0ee);
+        scene.fog = new THREE.FogExp2(0x7ec0ee, 0.0022);
 
         // カメラ (初期位置は後で追従させる)
         camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -242,23 +419,48 @@
         renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
         // ライト
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambientLight);
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x3a6b35, 0.65);
+        hemiLight.position.set(0, 100, 0);
+        scene.add(hemiLight);
 
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        dirLight.position.set(50, 100, 50);
+        dirLight = new THREE.DirectionalLight(0xfff8e7, 0.9);
+        dirLight.position.set(60, 120, 60);
         dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 10;
+        dirLight.shadow.camera.far = 350;
+        const d = 140;
+        dirLight.shadow.camera.left = -d;
+        dirLight.shadow.camera.right = d;
+        dirLight.shadow.camera.top = d;
+        dirLight.shadow.camera.bottom = -d;
         scene.add(dirLight);
 
-        // 地面 (PlaneGeometry)
-        const planeGeo = new THREE.PlaneGeometry(1000, 1000);
-        const planeMat = new THREE.MeshLambertMaterial({ color: 0x228B22 }); // 森の緑
+        // 地面 (芝生テクスチャ付きPlaneGeometry)
+        const planeGeo = new THREE.PlaneGeometry(1200, 1200);
+        const planeMat = new THREE.MeshLambertMaterial({ map: createGrassTexture() });
         const plane = new THREE.Mesh(planeGeo, planeMat);
         plane.rotation.x = -Math.PI / 2; // 水平にする
         plane.receiveShadow = true;
         scene.add(plane);
+
+        // 遠景の山々
+        const mountMat = new THREE.MeshLambertMaterial({ color: 0x3b6e52 });
+        const mountSnowMat = new THREE.MeshLambertMaterial({ color: 0x568265 });
+        for (let i = 0; i < 24; i++) {
+            const angle = (i / 24) * Math.PI * 2;
+            const dist = 360 + (i % 3) * 45;
+            const h = 45 + (i % 4) * 20;
+            const r = 55 + (i % 3) * 20;
+            const mGeo = new THREE.ConeGeometry(r, h, 7);
+            const mMesh = new THREE.Mesh(mGeo, i % 2 === 0 ? mountMat : mountSnowMat);
+            mMesh.position.set(Math.cos(angle) * dist, h / 2 - 2, Math.sin(angle) * dist);
+            scene.add(mMesh);
+        }
 
         // 車とゴーストカーは Group として初期化し、中身は buildCarModel で生成する
         carMesh = new THREE.Group();
@@ -270,22 +472,37 @@
     }
 
     // ==========================================
-    // エフェクト生成 (アスファルト模様＆煙)
+    // エフェクト生成 (純粋なアスファルト質感＆白煙)
+    // ※道路が交差しても線が横切らないよう、白線は下層ジオメトリに分離
     // ==========================================
     let asphaltTexture = null;
     function createAsphaltTexture() {
         const canvas = document.createElement('canvas');
-        canvas.width = 256; canvas.height = 256;
+        canvas.width = 512; canvas.height = 512;
         const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#444444'; ctx.fillRect(0, 0, 256, 256);
-        // ランダムノイズを描画してアスファルトの質感を出す
-        for (let i = 0; i < 8000; i++) {
-            ctx.fillStyle = Math.random() > 0.5 ? '#555555' : '#333333';
-            ctx.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+        ctx.fillStyle = '#38383a';
+        ctx.fillRect(0, 0, 512, 512);
+
+        // レコードラインの自然なタイヤラバー跡グラデーション（線が交差部で邪魔にならないシームレス仕様）
+        const grad = ctx.createLinearGradient(0, 0, 512, 0);
+        grad.addColorStop(0, 'rgba(0,0,0,0.18)');
+        grad.addColorStop(0.25, 'rgba(0,0,0,0.03)');
+        grad.addColorStop(0.5, 'rgba(0,0,0,0.12)');
+        grad.addColorStop(0.75, 'rgba(0,0,0,0.03)');
+        grad.addColorStop(1, 'rgba(0,0,0,0.18)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 512, 512);
+
+        // 細かなアスファルト粒子ノイズ
+        for (let i = 0; i < 20000; i++) {
+            ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.14)';
+            ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
         }
+
         const tex = new THREE.CanvasTexture(canvas);
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.RepeatWrapping;
+        tex.anisotropy = 4;
         return tex;
     }
 
@@ -374,107 +591,445 @@
         }
     }
 
-    // 車のモデルを組み立てる関数
+    // 車のモデルを組み立てる関数（タイヤ接地＆車種別ディテールアップ）
     function buildCarModel(group, carId, isGhost) {
-        // マテリアルの設定
-        const matBody = isGhost ? 
-            new THREE.MeshLambertMaterial({ color: 0x00FFFF, transparent: true, opacity: 0.5 }) :
-            new THREE.MeshLambertMaterial({ color: carId === 'Retro_FR' ? 0xffffff : 0xaaaaaa });
-            
-        const matWindow = isGhost ? 
-            new THREE.MeshLambertMaterial({ color: 0x00FFFF, transparent: true, opacity: 0.5 }) :
-            new THREE.MeshLambertMaterial({ color: 0x222222 });
+        const ghostMat = new THREE.MeshLambertMaterial({ color: 0x00FFFF, transparent: true, opacity: 0.42 });
 
-        const matTire = isGhost ? 
-            new THREE.MeshLambertMaterial({ color: 0x00FFFF, transparent: true, opacity: 0.5 }) :
-            new THREE.MeshLambertMaterial({ color: 0x111111 });
+        const matWindow = isGhost ? ghostMat :
+            new THREE.MeshStandardMaterial({ color: 0x111822, metalness: 0.85, roughness: 0.12 });
+        const matTire = isGhost ? ghostMat :
+            new THREE.MeshLambertMaterial({ color: 0x161616 });
+        const matHeadlight = isGhost ? ghostMat :
+            new THREE.MeshBasicMaterial({ color: 0xfffaed });
+        const matTaillight = isGhost ? ghostMat :
+            new THREE.MeshStandardMaterial({ color: 0xcc1111, emissive: 0x440000, roughness: 0.3 });
+        const matDarkTrim = isGhost ? ghostMat :
+            new THREE.MeshStandardMaterial({ color: 0x1c1e21, metalness: 0.2, roughness: 0.65 });
+        const matChrome = isGhost ? ghostMat :
+            new THREE.MeshStandardMaterial({ color: 0xdcdfe5, metalness: 0.9, roughness: 0.15 });
 
-        let bodyGeo, cabinGeo, roofGeo;
-        let bodyX, bodyY, cabinX, cabinY, roofX, roofY;
+        const chassis = new THREE.Group();
+        group.add(chassis);
+
+        const tireRadius = 0.33;
+        const tireWidth = 0.26;
+        let wheelPositions = [];
 
         if (carId === 'Retro_FR') {
-            // パターンA: 'Retro_FR'（AE86風：ロングノーズ・ショートデッキ）
-            bodyGeo = new THREE.BoxGeometry(4.0, 0.5, 1.8);
-            bodyX = 0; bodyY = 0.4;
-            cabinGeo = new THREE.BoxGeometry(1.8, 0.45, 1.4);
-            cabinX = -0.3; cabinY = 0.875;
-            roofGeo = new THREE.BoxGeometry(1.8, 0.05, 1.4);
-            roofX = -0.3; roofY = 1.125;
+            // =========================================================
+            // Retro_FR: 80年代 パンダカラーFR 3ドアハッチバッククーペ風
+            // =========================================================
+            const matWhite = isGhost ? ghostMat :
+                new THREE.MeshStandardMaterial({ color: 0xf7f7f5, metalness: 0.15, roughness: 0.25 });
+            const matPandaBlack = isGhost ? ghostMat :
+                new THREE.MeshStandardMaterial({ color: 0x18191b, metalness: 0.15, roughness: 0.55 });
+            const matAmber = isGhost ? ghostMat :
+                new THREE.MeshBasicMaterial({ color: 0xff9900 });
+
+            // ロアボディ（黒ツートン下部・地面近くまでしっかり下げる）
+            const lowerBody = new THREE.Mesh(new THREE.BoxGeometry(4.06, 0.26, 1.68), matPandaBlack);
+            lowerBody.position.set(0.0, 0.29, 0);
+            lowerBody.castShadow = !isGhost;
+            chassis.add(lowerBody);
+
+            // アッパーボディ（白ツートン上部）
+            const upperBody = new THREE.Mesh(new THREE.BoxGeometry(3.98, 0.28, 1.66), matWhite);
+            upperBody.position.set(0.0, 0.55, 0);
+            upperBody.castShadow = !isGhost;
+            chassis.add(upperBody);
+
+            // サイドの黒モールディングライン
+            const sideStrip = new THREE.Mesh(new THREE.BoxGeometry(4.02, 0.04, 1.70), matPandaBlack);
+            sideStrip.position.set(0.0, 0.43, 0);
+            chassis.add(sideStrip);
+
+            // 前後バンパー（黒樹脂風）
+            const fBumper = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.26, 1.74), matPandaBlack);
+            fBumper.position.set(1.98, 0.27, 0);
+            const rBumper = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.26, 1.74), matPandaBlack);
+            rBumper.position.set(-1.98, 0.27, 0);
+            chassis.add(fBumper, rBumper);
+
+            // フロントリップ＆黄色フォグランプ
+            const fLip = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, 1.66), matPandaBlack);
+            fLip.position.set(2.04, 0.14, 0);
+            chassis.add(fLip);
+
+            const fogGeo = new THREE.BoxGeometry(0.06, 0.08, 0.22);
+            const fogL = new THREE.Mesh(fogGeo, matAmber);
+            fogL.position.set(2.09, 0.28, 0.56);
+            const fogR = fogL.clone();
+            fogR.position.z = -0.56;
+            chassis.add(fogL, fogR);
+
+            // ロングノーズ・ウェッジシェイプボンネット
+            const hood = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.12, 1.60), matWhite);
+            hood.position.set(1.25, 0.69, 0);
+            hood.rotation.z = -0.07;
+            hood.castShadow = !isGhost;
+            chassis.add(hood);
+
+            // リトラクタブル風ポップアップヘッドライト（左右）
+            const popCaseGeo = new THREE.BoxGeometry(0.24, 0.16, 0.30);
+            const popLightGeo = new THREE.BoxGeometry(0.05, 0.11, 0.24);
+            [-0.56, 0.56].forEach(zPos => {
+                const popCase = new THREE.Mesh(popCaseGeo, matWhite);
+                popCase.position.set(1.82, 0.72, zPos);
+                const popCover = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.04, 0.31), matPandaBlack);
+                popCover.position.set(1.82, 0.80, zPos);
+                const popLens = new THREE.Mesh(popLightGeo, matHeadlight);
+                popLens.position.set(1.93, 0.71, zPos);
+                chassis.add(popCase, popCover, popLens);
+            });
+
+            // キャビンと傾斜したファストバックハッチ
+            const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.42, 1.42), matWindow);
+            cabin.position.set(-0.22, 0.88, 0);
+            cabin.castShadow = !isGhost;
+            chassis.add(cabin);
+
+            const fWindshield = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.42, 1.38), matWindow);
+            fWindshield.position.set(0.55, 0.84, 0);
+            fWindshield.rotation.z = -0.55;
+            chassis.add(fWindshield);
+
+            // 3ドアハッチバック特有のなだらかなリアガラス
+            const rHatchGlass = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.40, 1.38), matWindow);
+            rHatchGlass.position.set(-1.12, 0.83, 0);
+            rHatchGlass.rotation.z = 0.48;
+            chassis.add(rHatchGlass);
+
+            // 白ルーフ
+            const roof = new THREE.Mesh(new THREE.BoxGeometry(1.22, 0.06, 1.40), matWhite);
+            roof.position.set(-0.18, 1.11, 0);
+            roof.castShadow = !isGhost;
+            chassis.add(roof);
+
+            // リアエンドの黒ダックテールスポイラー
+            const rearSpoiler = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.10, 1.56), matPandaBlack);
+            rearSpoiler.position.set(-1.86, 0.73, 0);
+            chassis.add(rearSpoiler);
+
+            // 横並びの角型テールランプ＆ガーニッシュ
+            const tailGarnish = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 1.58), matPandaBlack);
+            tailGarnish.position.set(-1.97, 0.54, 0);
+            const tailL = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.13, 0.48), matTaillight);
+            tailL.position.set(-1.98, 0.54, 0.50);
+            const tailR = tailL.clone();
+            tailR.position.z = -0.50;
+            chassis.add(tailGarnish, tailL, tailR);
+
+            // シングル出しマフラー（右側）
+            const exhaustGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.25, 12);
+            exhaustGeo.rotateZ(Math.PI / 2);
+            const exhaust = new THREE.Mesh(exhaustGeo, matChrome);
+            exhaust.position.set(-2.05, 0.18, -0.52);
+            chassis.add(exhaust);
+
+            wheelPositions = [
+                { x: 1.22, z: 0.78, isFront: true },
+                { x: 1.22, z: -0.78, isFront: true },
+                { x: -1.20, z: 0.78, isFront: false },
+                { x: -1.20, z: -0.78, isFront: false }
+            ];
         } else {
-            // パターンB: 'Modern_FF'（カローラスポーツ風：ショートノーズ・ハッチバック）
-            bodyGeo = new THREE.BoxGeometry(3.8, 0.6, 1.8);
-            bodyX = 0.1; bodyY = 0.45;
-            cabinGeo = new THREE.BoxGeometry(2.4, 0.45, 1.4);
-            cabinX = 0.1; cabinY = 0.975;
-            roofGeo = new THREE.BoxGeometry(2.0, 0.05, 1.4);
-            roofX = 0.3; roofY = 1.225;
+            // =========================================================
+            // Modern_FF: 現代風スポーティ5ドアハッチバック（070 パールホワイト）
+            // =========================================================
+            const matBodyPearlWhite = isGhost ? ghostMat :
+                new THREE.MeshStandardMaterial({
+                    color: 0xf8f6f0,
+                    emissive: 0x121210,
+                    metalness: 0.25,
+                    roughness: 0.16
+                });
+
+            // ワイド＆ローなメインボディ
+            const mainBody = new THREE.Mesh(new THREE.BoxGeometry(4.00, 0.46, 1.78), matBodyPearlWhite);
+            mainBody.position.set(0.05, 0.42, 0);
+            mainBody.castShadow = !isGhost;
+            chassis.add(mainBody);
+
+            // 前後の張り出したブリスターフェンダー造形
+            const fFender = new THREE.Mesh(new THREE.BoxGeometry(1.10, 0.42, 1.88), matBodyPearlWhite);
+            fFender.position.set(1.20, 0.40, 0);
+            const rFender = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.44, 1.90), matBodyPearlWhite);
+            rFender.position.set(-1.12, 0.43, 0);
+            chassis.add(fFender, rFender);
+
+            // ブラックのサイドロアスカート（車高を低く見せる）
+            const sideSkirt = new THREE.Mesh(new THREE.BoxGeometry(2.40, 0.10, 1.84), matDarkTrim);
+            sideSkirt.position.set(0.05, 0.19, 0);
+            chassis.add(sideSkirt);
+
+            // 低くスラントしたフロントノーズ・ボンネット
+            const hood = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.20, 1.68), matBodyPearlWhite);
+            hood.position.set(1.36, 0.65, 0);
+            hood.rotation.z = -0.15;
+            hood.castShadow = !isGhost;
+            chassis.add(hood);
+
+            // 現代トヨタ風の大型台形ロアグリル＆フロントリップ
+            const bigGrille = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.34, 1.42), matDarkTrim);
+            bigGrille.position.set(2.00, 0.34, 0);
+            const frontLip = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.07, 1.86), matDarkTrim);
+            frontLip.position.set(1.96, 0.16, 0);
+            chassis.add(bigGrille, frontLip);
+
+            // 鋭い二眼/L字風LEDヘッドライトと中央アッパーグリルライン
+            const upperSlit = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.05, 1.00), matDarkTrim);
+            upperSlit.position.set(1.99, 0.56, 0);
+            const hlGeo = new THREE.BoxGeometry(0.16, 0.09, 0.42);
+            const hlL = new THREE.Mesh(hlGeo, matHeadlight);
+            hlL.position.set(1.97, 0.57, 0.64);
+            hlL.rotation.y = 0.15;
+            const hlR = new THREE.Mesh(hlGeo, matHeadlight);
+            hlR.position.set(1.97, 0.57, -0.64);
+            hlR.rotation.y = -0.15;
+            chassis.add(upperSlit, hlL, hlR);
+
+            // スポーティな5ドアハッチバックキャビン
+            const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.10, 0.44, 1.46), matWindow);
+            cabin.position.set(-0.16, 0.86, 0);
+            cabin.castShadow = !isGhost;
+            chassis.add(cabin);
+
+            const fWindshield = new THREE.Mesh(new THREE.BoxGeometry(0.80, 0.44, 1.42), matWindow);
+            fWindshield.position.set(0.76, 0.80, 0);
+            fWindshield.rotation.z = -0.52;
+            chassis.add(fWindshield);
+
+            const rWindow = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.44, 1.40), matWindow);
+            rWindow.position.set(-1.16, 0.82, 0);
+            rWindow.rotation.z = 0.48;
+            chassis.add(rWindow);
+
+            // ツートンのブラックルーフ＆シャークフィンアンテナ＆ルーフスポイラー
+            const blackRoof = new THREE.Mesh(new THREE.BoxGeometry(1.82, 0.07, 1.44), matDarkTrim);
+            blackRoof.position.set(-0.22, 1.10, 0);
+            blackRoof.castShadow = !isGhost;
+            const sharkFin = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.05), matDarkTrim);
+            sharkFin.position.set(-0.85, 1.18, 0);
+            const roofWing = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.06, 1.46), matDarkTrim);
+            roofWing.position.set(-1.24, 1.16, 0);
+            roofWing.rotation.z = 0.18;
+            chassis.add(blackRoof, sharkFin, roofWing);
+
+            // リアバンパーディフューザー＆左右2本出しマフラー
+            const rDiffuser = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.20, 1.76), matDarkTrim);
+            rDiffuser.position.set(-1.86, 0.23, 0);
+            chassis.add(rDiffuser);
+
+            const pipeGeo = new THREE.CylinderGeometry(0.065, 0.065, 0.22, 12);
+            pipeGeo.rotateZ(Math.PI / 2);
+            const pipeL = new THREE.Mesh(pipeGeo, matChrome);
+            pipeL.position.set(-1.95, 0.20, 0.58);
+            const pipeR = pipeL.clone();
+            pipeR.position.z = -0.58;
+            chassis.add(pipeL, pipeR);
+
+            // 横長のシャープなLEDテールランプ
+            const tlGeo = new THREE.BoxGeometry(0.12, 0.11, 0.50);
+            const tlL = new THREE.Mesh(tlGeo, matTaillight);
+            tlL.position.set(-1.90, 0.62, 0.58);
+            const tlR = tlL.clone();
+            tlR.position.z = -0.58;
+            chassis.add(tlL, tlR);
+
+            wheelPositions = [
+                { x: 1.24, z: 0.84, isFront: true },
+                { x: 1.24, z: -0.84, isFront: true },
+                { x: -1.20, z: 0.85, isFront: false },
+                { x: -1.20, z: -0.85, isFront: false }
+            ];
         }
 
-        // ボディ下部
-        const bodyMesh = new THREE.Mesh(bodyGeo, matBody);
-        bodyMesh.position.set(bodyX, bodyY, 0);
-        bodyMesh.castShadow = true;
-        bodyMesh.name = 'body';
-        group.add(bodyMesh);
+        // =========================================================
+        // 共通：円筒形タイヤ＆ホイール（Y = tireRadius で路面にぴったり接地）
+        // =========================================================
+        const wheelGeo = new THREE.CylinderGeometry(tireRadius, tireRadius, tireWidth, 20);
+        wheelGeo.rotateX(Math.PI / 2);
+        const rimGeo = new THREE.CylinderGeometry(tireRadius * 0.68, tireRadius * 0.68, tireWidth + 0.01, 14);
+        rimGeo.rotateX(Math.PI / 2);
+        const spokeGeo = new THREE.BoxGeometry(tireRadius * 1.25, 0.045, tireWidth + 0.02);
+        const spokeMat = (carId === 'Retro_FR') ? matDarkTrim : matChrome;
+        const rimColorMat = (carId === 'Retro_FR') ?
+            (isGhost ? ghostMat : new THREE.MeshStandardMaterial({ color: 0x33363a, metalness: 0.6, roughness: 0.4 })) :
+            matChrome;
 
-        // キャビン（窓ガラスを兼ねる）
-        const cabinMesh = new THREE.Mesh(cabinGeo, matWindow);
-        cabinMesh.position.set(cabinX, cabinY, 0);
-        cabinMesh.castShadow = true;
-        group.add(cabinMesh);
+        const steerPivots = [];
+        const rearPivots = [];
+        const spinWheels = [];
 
-        // ルーフ（ボディ同色）
-        const roofMesh = new THREE.Mesh(roofGeo, matBody);
-        roofMesh.position.set(roofX, roofY, 0);
-        roofMesh.castShadow = true;
-        group.add(roofMesh);
+        wheelPositions.forEach(pos => {
+            const pivot = new THREE.Group();
+            // タイヤの中心高さを半径(0.33)に設定し、下端が Y=0 になるようにする
+            pivot.position.set(pos.x, tireRadius, pos.z);
+            // 3D空間では z < 0 が車体左側、z > 0 が車体右側
+            pivot.userData = { isLeft: pos.z < 0, isFront: pos.isFront };
+            group.add(pivot);
 
-        // タイヤ（共通配置）
-        const tireGeo = new THREE.BoxGeometry(0.6, 0.6, 0.3);
-        const tirePositions = [
-            { x: 1.2, z: 0.8 },  // 前左
-            { x: 1.2, z: -0.8 }, // 前右
-            { x: -1.2, z: 0.8 }, // 後左
-            { x: -1.2, z: -0.8 } // 後右
-        ];
-        
-        tirePositions.forEach(pos => {
-            const tireMesh = new THREE.Mesh(tireGeo, matTire);
-            tireMesh.position.set(pos.x, 0.3, pos.z);
-            tireMesh.castShadow = true;
-            group.add(tireMesh);
+            const spinner = new THREE.Group();
+            const tireMesh = new THREE.Mesh(wheelGeo, matTire);
+            tireMesh.castShadow = !isGhost;
+            const rimMesh = new THREE.Mesh(rimGeo, rimColorMat);
+
+            const numSpokes = (carId === 'Retro_FR') ? 4 : 3;
+            for (let s = 0; s < numSpokes; s++) {
+                const sp = new THREE.Mesh(spokeGeo, spokeMat);
+                sp.rotation.z = (s * Math.PI) / numSpokes;
+                spinner.add(sp);
+            }
+
+            spinner.add(tireMesh, rimMesh);
+            pivot.add(spinner);
+
+            if (pos.isFront) steerPivots.push(pivot);
+            else rearPivots.push(pivot);
+            spinWheels.push(spinner);
         });
+
+        group.userData = {
+            chassis: chassis,
+            steerPivots: steerPivots,
+            rearPivots: rearPivots,
+            spinWheels: spinWheels,
+            tailMat: isGhost ? null : matTaillight
+        };
     }
 
-    // コースのゲートと縁石を3D空間に配置する（CubicBezierCurve3を使用）
+    // 車両のタイヤ回転・ステアリング・トー角・荷重ロール＆ピッチ・ブレーキランプを更新する関数
+    function updateCarVisuals(group, steer, brake, speed, ax, ay, dt) {
+        if (!group || !group.userData || !group.userData.chassis) return;
+        const ud = group.userData;
+
+        // 前輪のステアリング角度＋設定されたトー角の視覚反映
+        const steerAngle = -steer * 0.42;
+        const fToeRad = (typeof frontToeDeg !== 'undefined' ? frontToeDeg : 0) * (Math.PI / 180);
+        const rToeRad = (typeof rearToeDeg !== 'undefined' ? rearToeDeg : 0) * (Math.PI / 180);
+
+        ud.steerPivots.forEach(p => {
+            const toeOffset = p.userData.isLeft ? -fToeRad : fToeRad;
+            p.rotation.y = steerAngle + toeOffset;
+        });
+        if (ud.rearPivots) {
+            ud.rearPivots.forEach(p => {
+                p.rotation.y = p.userData.isLeft ? -rToeRad : rToeRad;
+            });
+        }
+
+        // 走行速度に応じたタイヤの回転
+        wheelAngle += (speed / 0.33) * dt;
+        ud.spinWheels.forEach(w => { w.rotation.z = -wheelAngle; });
+
+        // ブレーキランプ点灯表現
+        if (ud.tailMat) {
+            if (brake > 0.05) {
+                ud.tailMat.color.setHex(0xff2222);
+                ud.tailMat.emissive.setHex(0xff0000);
+            } else {
+                ud.tailMat.color.setHex(0xcc1111);
+                ud.tailMat.emissive.setHex(0x330000);
+            }
+        }
+
+        // 旋回G・加減速Gによる車体のロール＆ピッチ
+        const targetRoll = Math.max(-0.07, Math.min(0.07, -ay * 0.006));
+        const targetPitch = Math.max(-0.045, Math.min(0.045, ax * 0.0035));
+        ud.chassis.rotation.x += (targetRoll - ud.chassis.rotation.x) * 0.2;
+        ud.chassis.rotation.z += (targetPitch - ud.chassis.rotation.z) * 0.2;
+    }
+
+    // ==========================================
+    // コース3D構築（交差点カリング＆二層レイヤー描画・周囲の木々配置対応）
+    // ==========================================
     function setupCourse3D(course) {
-        // 古いゲートと縁石を削除
+        // 古いコースオブジェクトを削除
         gateMeshes.forEach(m => scene.remove(m));
         gateMeshes = [];
 
-        // 縁石・ライン用ブロックの基本形状
-        const curbWidth = 1.0;
-        const curbHeight = 0.02; // 高さを0.1から0.02に変更し薄くする
+        const curbWidth = 0.9;
+        const curbHeight = 0.035;
         const curbLength = 1.0;
         const curbGeo = new THREE.BoxGeometry(curbWidth, curbHeight, curbLength);
         
-        const matRed = new THREE.MeshLambertMaterial({ color: 0xff0000 });
-        const matWhite = new THREE.MeshLambertMaterial({ color: 0xffffff });
+        const matRed = new THREE.MeshLambertMaterial({ color: 0xe53935 });
+        const matWhite = new THREE.MeshLambertMaterial({ color: 0xf5f5f5 });
         const matBlack = new THREE.MeshLambertMaterial({ color: 0x222222 });
 
-        const roadPositions = [];
-        const roadIndices = [];
-        const roadUvs = []; // テクスチャマッピング用UV配列
-        let vertexIndex = 0;
-        let currentV = 0;
-        const roadY = 0.03; // Z-fighting回避用のアスファルトの高さ（縁石の上に描画するため0.03に上げる）
+        // --- STEP 1: 全ゲート間のベジェ曲線と道路中心点群を先に計算 ---
+        const curvesData = [];
+        const allRoadSamples = []; // { x, z, segIdx, halfW }
 
-        // 赤白縁石の色を繋げるための累積距離
+        for (let i = 0; i < course.gates.length; i++) {
+            const gate = course.gates[i];
+            const nextGate = course.gates[(i + 1) % course.gates.length];
+
+            const p0 = new THREE.Vector3(gate.cx, 0, gate.cy);
+            const p3 = new THREE.Vector3(nextGate.cx, 0, nextGate.cy);
+            const dist = p0.distanceTo(p3);
+
+            // タイトコーナーでポリゴンが裏返らないよう制御点距離に上限を設定
+            const handleLen = Math.min(dist * 0.34, 12.0);
+            const p1 = new THREE.Vector3(gate.cx + gate.dir.x * handleLen, 0, gate.cy + gate.dir.y * handleLen);
+            const p2 = new THREE.Vector3(nextGate.cx - nextGate.dir.x * handleLen, 0, nextGate.cy - nextGate.dir.y * handleLen);
+
+            const curve = new THREE.CubicBezierCurve3(p0, p1, p2, p3);
+            const segments = 24;
+            const points = curve.getPoints(segments);
+
+            curvesData.push({ gate, nextGate, curve, points, segments, segIdx: i });
+
+            for (let j = 0; j < segments; j++) {
+                const pt = points[j];
+                const w = gate.roadHalfWidth + (nextGate.roadHalfWidth - gate.roadHalfWidth) * (j / segments);
+                allRoadSamples.push({ x: pt.x, z: pt.z, segIdx: i, halfW: w });
+            }
+        }
+
+        // 指定した座標(x, z)が「別の道路セグメント」の路面内に入っているか判定する関数
+        const isInsideOtherRoad = (x, z, currentSegIdx, margin = 0.0) => {
+            const totalSegs = course.gates.length;
+            for (let k = 0; k < allRoadSamples.length; k++) {
+                const s = allRoadSamples[k];
+                // 同一セグメント、または前後の隣接セグメントの繋ぎ目は除外
+                const diff = Math.abs(s.segIdx - currentSegIdx);
+                if (diff === 0 || diff === 1 || diff === totalSegs - 1) continue;
+
+                if (Math.hypot(x - s.x, z - s.z) < s.halfW + margin) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        // 任意の道路中心から指定距離以内か判定（木々の路面干渉チェック用）
+        const isPointOnAnyRoad = (x, z, margin = 1.2) => {
+            for (let k = 0; k < allRoadSamples.length; k++) {
+                const s = allRoadSamples[k];
+                if (Math.hypot(x - s.x, z - s.z) < s.halfW + margin) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        // --- STEP 2: 二層道路メッシュ（下層：白線ベース、上層：アスファルト）と縁石の生成 ---
+        const basePositions = []; // 下層：白い路肩ライン層
+        const baseIndices = [];
+        let baseVertexIdx = 0;
+
+        const roadPositions = []; // 上層：純粋なアスファルト層
+        const roadIndices = [];
+        const roadUvs = [];
+        let roadVertexIdx = 0;
+        let currentV = 0;
+
         let totalCurbDistanceL = 0;
         let totalCurbDistanceR = 0;
 
-        // セグメント間に縁石を配置する関数
-        const createCurb = (startPt, endPt, isLeft) => {
+        // 他の道路と重ならない場所のみ縁石を配置する関数
+        const createCurb = (startPt, endPt, isLeft, segIdx) => {
             const dx = endPt.x - startPt.x;
             const dz = endPt.z - startPt.z;
             const dist = Math.hypot(dx, dz);
@@ -482,18 +1037,22 @@
             
             const numBlocks = Math.max(1, Math.floor(dist / curbLength));
             const actualLen = dist / numBlocks;
-            const angle = Math.atan2(dx, dz); // Three.jsのrotation.y用
+            const angle = Math.atan2(dx, dz);
             
             for (let b = 0; b < numBlocks; b++) {
-                // 累積距離から色を決定してシームレスな赤白パターンを作る
+                const progress = (b + 0.5) / numBlocks;
+                const bx = startPt.x + dx * progress;
+                const bz = startPt.z + dz * progress;
+
+                // 交差点の中央など、他の道路の路面内に入る縁石はスキップ
+                if (isInsideOtherRoad(bx, bz, segIdx, 0.6)) continue;
+
                 const currentDist = (isLeft ? totalCurbDistanceL : totalCurbDistanceR) + b * actualLen;
                 const isRed = Math.floor(currentDist / curbLength) % 2 === 0;
                 const mat = isRed ? matRed : matWhite;
                 
                 const mesh = new THREE.Mesh(curbGeo, mat);
-                const progress = (b + 0.5) / numBlocks;
-                
-                mesh.position.set(startPt.x + dx * progress, 0.01, startPt.z + dz * progress); // 縁石のY座標を0.01に下げる
+                mesh.position.set(bx, 0.02, bz);
                 mesh.rotation.y = angle;
                 mesh.scale.z = actualLen / curbLength;
                 mesh.receiveShadow = true;
@@ -506,95 +1065,99 @@
             else totalCurbDistanceR += dist;
         };
 
-        // 各ゲート間をベジェ曲線で繋ぐ
-        for (let i = 0; i < course.gates.length; i++) {
-            const gate = course.gates[i];
-            const nextGate = course.gates[(i + 1) % course.gates.length];
+        for (let i = 0; i < curvesData.length; i++) {
+            const { gate, nextGate, curve, points, segments } = curvesData[i];
+            const wStart = gate.roadHalfWidth;
+            const wEnd = nextGate.roadHalfWidth;
 
-            // ベジェ曲線の制御点計算 (2DのY座標を3DのZ座標として扱う)
-            const p0 = new THREE.Vector3(gate.cx, 0, gate.cy);
-            const p3 = new THREE.Vector3(nextGate.cx, 0, nextGate.cy);
-            const dist = p0.distanceTo(p3);
-            
-            // 制御点1: 始点から進行方向へ距離の0.4倍進む
-            const p1 = new THREE.Vector3(
-                gate.cx + gate.dir.x * dist * 0.4, 
-                0, 
-                gate.cy + gate.dir.y * dist * 0.4
-            );
-            // 制御点2: 終点から逆方向へ距離の0.4倍
-            const p2 = new THREE.Vector3(
-                nextGate.cx - nextGate.dir.x * dist * 0.4, 
-                0, 
-                nextGate.cy - nextGate.dir.y * dist * 0.4
-            );
-
-            // 曲線生成と分割
-            const curve = new THREE.CubicBezierCurve3(p0, p1, p2, p3);
-            const segments = 20;
-            const points = curve.getPoints(segments);
-
-            // ゲート幅 (中心から端までの距離) に0.4を掛けて2D版の道幅に合わせる
-            const wStart = Math.hypot(gate.p1.x - gate.cx, gate.p1.y - gate.cy) * 0.4;
-            const wEnd = Math.hypot(nextGate.p1.x - nextGate.cx, nextGate.p1.y - nextGate.cy) * 0.4;
-
+            // --- 各セグメントの道路頂点生成 ---
             for (let j = 0; j < segments; j++) {
                 const pt0 = points[j];
                 const pt1 = points[j + 1];
                 
-                // 曲線の接線 (tangent) を取得
                 const tangent0 = curve.getTangent(j / segments).normalize();
                 const tangent1 = curve.getTangent((j + 1) / segments).normalize();
                 
-                // 接線から法線ベクトル（左右方向）を計算
-                // 2D平面上の進行方向に対して、左は(-Z, X)、右は(Z, -X)
                 const leftDir0 = new THREE.Vector3(-tangent0.z, 0, tangent0.x);
                 const rightDir0 = new THREE.Vector3(tangent0.z, 0, -tangent0.x);
                 const leftDir1 = new THREE.Vector3(-tangent1.z, 0, tangent1.x);
                 const rightDir1 = new THREE.Vector3(tangent1.z, 0, -tangent1.x);
 
-                // 幅を線形補間
                 const w0 = wStart + (wEnd - wStart) * (j / segments);
                 const w1 = wStart + (wEnd - wStart) * ((j + 1) / segments);
 
-                // 左右の頂点を計算 (p2側が左、p1側が右)
+                // 上層（純粋なアスファルト面：内側に0.35m絞ることで下層の白線が両端に露出する）
+                const asphaltW0 = w0 - 0.35;
+                const asphaltW1 = w1 - 0.35;
+                const a2_0 = new THREE.Vector3().copy(pt0).add(leftDir0.clone().multiplyScalar(asphaltW0));
+                const a1_0 = new THREE.Vector3().copy(pt0).add(rightDir0.clone().multiplyScalar(asphaltW0));
+                const a2_1 = new THREE.Vector3().copy(pt1).add(leftDir1.clone().multiplyScalar(asphaltW1));
+                const a1_1 = new THREE.Vector3().copy(pt1).add(rightDir1.clone().multiplyScalar(asphaltW1));
+
+                // Z-fighting防止のため、セグメントごとにごく微小な高さオフセットを付与
+                const y0 = 0.038 + ((i * segments + j) * 0.00004);
+                const y1 = 0.038 + ((i * segments + j + 1) * 0.00004);
+
+                const distV = pt0.distanceTo(pt1) / 8.0;
+                const nextV = currentV + distV;
+
+                roadPositions.push(a1_0.x, y0, a1_0.z);
+                roadPositions.push(a2_0.x, y0, a2_0.z);
+                roadPositions.push(a1_1.x, y1, a1_1.z);
+                roadPositions.push(a2_1.x, y1, a2_1.z);
+
+                roadUvs.push(1, currentV);
+                roadUvs.push(0, currentV);
+                roadUvs.push(1, nextV);
+                roadUvs.push(0, nextV);
+                currentV = nextV;
+
+                roadIndices.push(roadVertexIdx, roadVertexIdx + 1, roadVertexIdx + 2);
+                roadIndices.push(roadVertexIdx + 1, roadVertexIdx + 3, roadVertexIdx + 2);
+                roadVertexIdx += 4;
+
+                // 下層（路肩の白線ベース層：Y = 0.025 で描画し、交差点では上層のアスファルトに隠れる）
                 const p2_0 = new THREE.Vector3().copy(pt0).add(leftDir0.clone().multiplyScalar(w0));
                 const p1_0 = new THREE.Vector3().copy(pt0).add(rightDir0.clone().multiplyScalar(w0));
                 const p2_1 = new THREE.Vector3().copy(pt1).add(leftDir1.clone().multiplyScalar(w1));
                 const p1_1 = new THREE.Vector3().copy(pt1).add(rightDir1.clone().multiplyScalar(w1));
 
-                // UVマッピング用の進行方向の距離を計算（約4.0ごとにテクスチャが1周）
-                const distV = pt0.distanceTo(pt1) / 4.0;
-                const nextV = currentV + distV;
+                const baseY = 0.025 + ((i * segments + j) * 0.00002);
+                basePositions.push(p1_0.x, baseY, p1_0.z);
+                basePositions.push(p2_0.x, baseY, p2_0.z);
+                basePositions.push(p1_1.x, baseY, p1_1.z);
+                basePositions.push(p2_1.x, baseY, p2_1.z);
 
-                // 道路メッシュの頂点追加
-                roadPositions.push(p1_0.x, roadY, p1_0.z);       // 0: 右後
-                roadPositions.push(p2_0.x, roadY, p2_0.z);       // 1: 左後
-                roadPositions.push(p1_1.x, roadY, p1_1.z);       // 2: 右前
-                roadPositions.push(p2_1.x, roadY, p2_1.z);       // 3: 左前
+                baseIndices.push(baseVertexIdx, baseVertexIdx + 1, baseVertexIdx + 2);
+                baseIndices.push(baseVertexIdx + 1, baseVertexIdx + 3, baseVertexIdx + 2);
+                baseVertexIdx += 4;
 
-                // UV座標の追加
-                roadUvs.push(1, currentV);
-                roadUvs.push(0, currentV);
-                roadUvs.push(1, nextV);
-                roadUvs.push(0, nextV);
-                
-                currentV = nextV;
+                // 縁石の生成（他の道路と重なる部分は自動スキップ）
+                const c2_0 = new THREE.Vector3().copy(pt0).add(leftDir0.clone().multiplyScalar(w0 + 0.45));
+                const c1_0 = new THREE.Vector3().copy(pt0).add(rightDir0.clone().multiplyScalar(w0 + 0.45));
+                const c2_1 = new THREE.Vector3().copy(pt1).add(leftDir1.clone().multiplyScalar(w1 + 0.45));
+                const c1_1 = new THREE.Vector3().copy(pt1).add(rightDir1.clone().multiplyScalar(w1 + 0.45));
 
-                // 2つの三角形ポリゴン
-                roadIndices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
-                roadIndices.push(vertexIndex + 1, vertexIndex + 3, vertexIndex + 2);
-                vertexIndex += 4;
-
-                // 縁石の生成
-                createCurb(p2_0, p2_1, true);   // 左側縁石
-                createCurb(p1_0, p1_1, false);  // 右側縁石
+                createCurb(c2_0, c2_1, true, i);
+                createCurb(c1_0, c1_1, false, i);
             }
         }
 
-        // 道路メッシュの生成
+        // 下層（白線ベースメッシュ）の追加
+        if (basePositions.length > 0) {
+            const baseGeo = new THREE.BufferGeometry();
+            baseGeo.setAttribute('position', new THREE.Float32BufferAttribute(basePositions, 3));
+            baseGeo.setIndex(baseIndices);
+            baseGeo.computeVertexNormals();
+            const baseMat = new THREE.MeshLambertMaterial({ color: 0xeeeeee, side: THREE.DoubleSide });
+            const baseMesh = new THREE.Mesh(baseGeo, baseMat);
+            baseMesh.receiveShadow = true;
+            scene.add(baseMesh);
+            gateMeshes.push(baseMesh);
+        }
+
+        // 上層（アスファルト本層メッシュ）の追加
         if (roadPositions.length > 0) {
-            // 自動生成したアスファルトテクスチャを割り当てる
             if (!asphaltTexture) asphaltTexture = createAsphaltTexture();
             
             const roadGeo = new THREE.BufferGeometry();
@@ -603,10 +1166,12 @@
             roadGeo.setIndex(roadIndices);
             roadGeo.computeVertexNormals();
 
-            const roadMat = new THREE.MeshLambertMaterial({ 
-                color: 0xaaaaaa, // テクスチャと掛け合わせるためベースを明るめに
+            const roadMat = new THREE.MeshStandardMaterial({ 
+                color: 0xd0d0d0,
                 map: asphaltTexture,
-                side: THREE.DoubleSide 
+                roughness: 0.85,
+                metalness: 0.05,
+                side: THREE.DoubleSide
             });
             const roadMesh = new THREE.Mesh(roadGeo, roadMat);
             roadMesh.receiveShadow = true;
@@ -614,21 +1179,13 @@
             gateMeshes.push(roadMesh);
         }
 
-        // スタート/ゴールライン
+        // スタート/ゴールラインのチェッカー模様
         if (course.gates.length > 0) {
             const startGate = course.gates[0];
-            
-            // ゲート幅(中心から端まで)を0.4倍して道幅に合わせる
-            const wStart = Math.hypot(startGate.p1.x - startGate.cx, startGate.p1.y - startGate.cy) * 0.4;
-            
-            // 進行方向から直角方向(左右)のベクトルを計算
+            const wStart = startGate.roadHalfWidth;
             const leftDir = new THREE.Vector3(-startGate.dir.y, 0, startGate.dir.x);
             const rightDir = new THREE.Vector3(startGate.dir.y, 0, -startGate.dir.x);
-            
-            // 中心座標
             const pCenter = new THREE.Vector3(startGate.cx, 0, startGate.cy);
-            
-            // 中心座標から左右に wStart ずつ伸ばした位置を始点・終点とする
             const pStart = new THREE.Vector3().copy(pCenter).add(leftDir.multiplyScalar(wStart));
             const pEnd = new THREE.Vector3().copy(pCenter).add(rightDir.multiplyScalar(wStart));
             
@@ -645,7 +1202,7 @@
                     const mat = b % 2 === 0 ? matWhite : matBlack;
                     const mesh = new THREE.Mesh(curbGeo, mat);
                     const progress = (b + 0.5) / numBlocks;
-                    mesh.position.set(pStart.x + dx * progress, 0.04, pStart.z + dz * progress); // アスファルトより少し上の0.04に配置
+                    mesh.position.set(pStart.x + dx * progress, 0.05, pStart.z + dz * progress);
                     mesh.rotation.y = angle;
                     mesh.scale.z = actualLen / curbLength;
                     mesh.receiveShadow = true;
@@ -653,6 +1210,40 @@
                     gateMeshes.push(mesh);
                 }
             }
+        }
+
+        // コース周囲（道路から離れた安全な場所）に木々を配置
+        const trunkGeo = new THREE.CylinderGeometry(0.4, 0.6, 2.5, 7);
+        const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5d4037 });
+        const leavesGeo1 = new THREE.ConeGeometry(2.6, 5.0, 8);
+        const leavesGeo2 = new THREE.ConeGeometry(2.0, 4.0, 8);
+        const leavesMat1 = new THREE.MeshLambertMaterial({ color: 0x1b5e20 });
+        const leavesMat2 = new THREE.MeshLambertMaterial({ color: 0x2e7d32 });
+
+        for (let t = 0; t < 65; t++) {
+            const angle = (t / 65) * Math.PI * 2 + (t % 3) * 0.2;
+            const radius = 35 + (t * 17) % 135;
+            const tx = Math.cos(angle) * radius;
+            const tz = Math.sin(angle) * radius;
+
+            if (isPointOnAnyRoad(tx, tz, 14.0)) continue;
+
+            const tree = new THREE.Group();
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.y = 1.25;
+            const l1 = new THREE.Mesh(leavesGeo1, t % 2 === 0 ? leavesMat1 : leavesMat2);
+            l1.position.y = 4.2;
+            l1.castShadow = true;
+            const l2 = new THREE.Mesh(leavesGeo2, t % 2 === 0 ? leavesMat2 : leavesMat1);
+            l2.position.y = 6.5;
+            l2.castShadow = true;
+            tree.add(trunk, l1, l2);
+
+            const sc = 0.85 + (t % 5) * 0.15;
+            tree.scale.set(sc, sc, sc);
+            tree.position.set(tx, 0, tz);
+            scene.add(tree);
+            gateMeshes.push(tree);
         }
     }
 
@@ -676,23 +1267,74 @@
         Modern_FF: {
             id: 'Modern_FF', mass: 1350, Iz: 1900, lf: 1.1, lr: 1.5,
             C_alpha_f: 65000, C_alpha_r: 90000, mu: 1.0,
-            driveType: 'FF', brakeBias: 0.7, T: 1.53, h: 0.5
+            driveType: 'FF', brakeBias: 0.7, T: 1.53, h: 0.5,
+            defaultFrontToe: 0.30, defaultRearToe: 0.45
         },
         Retro_FR: {
             id: 'Retro_FR', mass: 950, Iz: 1200, lf: 1.2, lr: 1.2,
             C_alpha_f: 45000, C_alpha_r: 45000, mu: 0.8,
-            driveType: 'FR', brakeBias: 0.6, T: 1.53, h: 0.5
+            driveType: 'FR', brakeBias: 0.6, T: 1.53, h: 0.5,
+            defaultFrontToe: 0.40, defaultRearToe: 0.65
         }
+    };
+
+    // 車種ごとの現在のトー角設定値（初期値は各車両の推奨安定セッティング）
+    const carToeSettings = {
+        Modern_FF: { front: carsData.Modern_FF.defaultFrontToe, rear: carsData.Modern_FF.defaultRearToe },
+        Retro_FR:  { front: carsData.Retro_FR.defaultFrontToe,  rear: carsData.Retro_FR.defaultRearToe }
     };
     
     let selectedCarId = 'Modern_FF';
     let currentCar = null;
     let absEnabled = true;
+    let frontToeDeg = carsData.Modern_FF.defaultFrontToe; // フロント片輪トー角 (度): +がトーイン, -がトーアウト
+    let rearToeDeg = carsData.Modern_FF.defaultRearToe;   // リア片輪トー角 (度): +がトーイン, -がトーアウト
+
+    function formatToeBadge(deg) {
+        if (Math.abs(deg) < 0.01) return "0.00° (NEUTRAL)";
+        const dir = deg > 0 ? "IN +" : "OUT ";
+        return `${dir}${deg.toFixed(2)}°`;
+    }
+
+    window.updateToeUI = function() {
+        const fSlider = document.getElementById('front-toe-slider');
+        const rSlider = document.getElementById('rear-toe-slider');
+        if (fSlider && rSlider) {
+            frontToeDeg = parseFloat(fSlider.value) || 0.0;
+            rearToeDeg = parseFloat(rSlider.value) || 0.0;
+            if (carToeSettings[selectedCarId]) {
+                carToeSettings[selectedCarId].front = frontToeDeg;
+                carToeSettings[selectedCarId].rear = rearToeDeg;
+            }
+            document.getElementById('front-toe-disp').innerText = formatToeBadge(frontToeDeg);
+            document.getElementById('rear-toe-disp').innerText = formatToeBadge(rearToeDeg);
+        }
+    };
+
+    window.resetToeTuning = function() {
+        const fSlider = document.getElementById('front-toe-slider');
+        const rSlider = document.getElementById('rear-toe-slider');
+        const carDef = carsData[selectedCarId];
+        if (fSlider && rSlider && carDef) {
+            fSlider.value = carDef.defaultFrontToe.toFixed(2);
+            rSlider.value = carDef.defaultRearToe.toFixed(2);
+            updateToeUI();
+        }
+    };
 
     window.selectCar = function(carId) {
         selectedCarId = carId;
         document.querySelectorAll('.car-btn').forEach(btn => btn.classList.remove('active-car'));
         document.getElementById('car-' + carId).classList.add('active-car');
+
+        const fSlider = document.getElementById('front-toe-slider');
+        const rSlider = document.getElementById('rear-toe-slider');
+        const saved = carToeSettings[carId];
+        if (fSlider && rSlider && saved) {
+            fSlider.value = saved.front.toFixed(2);
+            rSlider.value = saved.rear.toFixed(2);
+            updateToeUI();
+        }
     };
 
     function formatTime(ms) {
@@ -765,14 +1407,21 @@
         }, isLong ? 3000 : 1200);
     }
 
+    // 道幅(roadHalfWidth = 9.0m / 全幅18m)に最適化し、急カーブでのイン側ポリゴン折り返しを防止
     function createGate(x, y, width, yaw) {
+        let roadHalfWidth = 9.0;
         let detectionWidth = Math.max(width * 2.0, 60); 
         let dx = Math.cos(yaw + Math.PI/2) * (detectionWidth/2);
         let dy = Math.sin(yaw + Math.PI/2) * (detectionWidth/2);
-        return { cx: x, cy: y, p1: { x: x - dx, y: y - dy }, p2: { x: x + dx, y: y + dy }, dir: { x: Math.cos(yaw), y: Math.sin(yaw) } };
+        return {
+            cx: x, cy: y,
+            roadHalfWidth: roadHalfWidth,
+            p1: { x: x - dx, y: y - dy },
+            p2: { x: x + dx, y: y + dy },
+            dir: { x: Math.cos(yaw), y: Math.sin(yaw) }
+        };
     }
 
-    // 2D描画ロジックは削除し、物理的なゲート座標のみ定義
     const courses = {
         oval: {
             name: 'オーバル', laps: 3, startState: [-5, -30, 0, 0, 0, 0], 
@@ -783,18 +1432,34 @@
         },
         figure8: {
             name: '8の字', laps: 2, startState: [-38, 33, 0, 0, 0, 0],
+            // 交差点(0,0)のど真ん中に2つのゲートが重ならないよう、交差前後へわずかにオフセット
             gates: [
-                createGate(-33, 33, 20, 0), createGate(0, 0, 25, -Math.PI/4), createGate(33, -33, 20, 0), createGate(66, 0, 20, Math.PI/2),
-                createGate(33, 33, 20, Math.PI), createGate(0, 0, 25, -Math.PI*3/4), createGate(-33, -33, 20, Math.PI), createGate(-66, 0, 20, Math.PI/2)
+                createGate(-33, 33, 20, 0),
+                createGate(8, -8, 25, -Math.PI/4),
+                createGate(33, -33, 20, 0),
+                createGate(66, 0, 20, Math.PI/2),
+                createGate(33, 33, 20, Math.PI),
+                createGate(-8, -8, 25, -Math.PI*3/4),
+                createGate(-33, -33, 20, Math.PI),
+                createGate(-66, 0, 20, Math.PI/2)
             ]
         },
         technical: {
             name: 'テクニカル', laps: 2, startState: [5, 40, Math.PI, 0, 0, 0],
+            // インフィールドへ切り込む鋭いS字シケインと、深いブレーキングを要求する東端タイトヘアピン＆複合コーナー
             gates: [
-                createGate(0, 40, 20, Math.PI), createGate(-40, 40, 20, Math.PI), createGate(-60, 20, 20, -Math.PI/2), 
-                createGate(-40, 0, 20, -Math.PI/2), createGate(-30, -20, 20, 0), createGate(-20, -30, 20, -Math.PI/2), 
-                createGate(10, -40, 20, 0), createGate(40, -40, 20, 0), createGate(60, -20, 20, Math.PI/2), 
-                createGate(40, 0, 20, Math.PI), createGate(20, 20, 25, Math.PI/2), createGate(20, 40, 20, Math.PI) 
+                createGate(0, 40, 20, Math.PI),           // 0: ホームストレート
+                createGate(-42, 40, 20, Math.PI),         // 1: 第1コーナー進入
+                createGate(-64, 20, 20, -Math.PI/2),      // 2: 第1タイト左ターン
+                createGate(-34, 4, 20, -Math.PI/12),      // 3: S字セクション1（内側へ深く切り込む）
+                createGate(-26, -22, 20, -Math.PI*3/5),   // 4: S字セクション2（鋭い右切り返し）
+                createGate(-12, -42, 20, 0),              // 5: バックストレート立ち上がり
+                createGate(22, -42, 20, 0),               // 6: バックストレート中央
+                createGate(54, -42, 20, 0),               // 7: ヘアピン進入ブレーキング
+                createGate(72, -20, 20, Math.PI/2),       // 8: 東端タイトヘアピン頂点
+                createGate(46, -2, 20, Math.PI*5/6),      // 9: ヘアピン出口（インフィールドへ）
+                createGate(18, 10, 20, Math.PI/2),        // 10: インフィールドのタイト右複合コーナー
+                createGate(22, 33, 20, Math.PI*3/4)       // 11: 最終複合コーナーからホームストレートへ
             ]
         }
     };
@@ -1008,22 +1673,43 @@
         const car = currentCar;
         const L = car.lf + car.lr;
 
+        // 静止荷重およびピッチ・ロールによる4輪それぞれの垂直荷重計算
         let Fz_static_f = car.mass * g * car.lr / L / 2;
         let Fz_static_r = car.mass * g * car.lf / L / 2;
         let dFz_pitch = car.mass * current_ax * car.h / L / 2;
         let dFz_roll_f = car.mass * current_ay * car.h / car.T * 0.6; 
         let dFz_roll_r = car.mass * current_ay * car.h / car.T * 0.4;
-        let Fz_fl = Math.max(0.1, Fz_static_f - dFz_pitch + dFz_roll_f);
-        let Fz_fr = Math.max(0.1, Fz_static_f - dFz_pitch - dFz_roll_f);
-        let Fz_rl = Math.max(0.1, Fz_static_r + dFz_pitch + dFz_roll_r);
-        let Fz_rr = Math.max(0.1, Fz_static_r + dFz_pitch - dFz_roll_r);
+        let Fz_base_f = Math.max(0.1, Fz_static_f - dFz_pitch);
+        let Fz_base_r = Math.max(0.1, Fz_static_r + dFz_pitch);
+        let Fz_fl = Math.max(0.1, Fz_base_f + dFz_roll_f);
+        let Fz_fr = Math.max(0.1, Fz_base_f - dFz_roll_f);
+        let Fz_rl = Math.max(0.1, Fz_base_r + dFz_roll_r);
+        let Fz_rr = Math.max(0.1, Fz_base_r - dFz_roll_r);
         loads = [Fz_fl, Fz_fr, Fz_rl, Fz_rr];
 
+        // 左右輪の旋回半径差による対地前後速度 (右旋回 r > 0 のとき左輪fl/rlが外輪となり増速)
+        let u_left  = Math.max(0.5, Math.abs(u_safe + (car.T / 2) * r)) * Math.sign(u_safe);
+        let u_right = Math.max(0.5, Math.abs(u_safe - (car.T / 2) * r)) * Math.sign(u_safe);
+
+        // トー角 (rad): 正(+)がトーイン(内向き)、負(-)がトーアウト(外向き)
+        let toe_f = frontToeDeg * (Math.PI / 180);
+        let toe_r = rearToeDeg * (Math.PI / 180);
+
+        // フロント操舵輪は荷重移動時のニューマチックトレイル・コンプライアンス特性とタイヤ荷重依存性を考慮
+        // (直進時は左右均等にトー角が作用し、旋回時は内輪の初期応答・外輪の飽和特性として作用)
+        let f_comp_fl = Math.max(0.25, Math.min(2.5, (Fz_fr / Fz_fl) * (Fz_fr / Fz_base_f)));
+        let f_comp_fr = Math.max(0.25, Math.min(2.5, (Fz_fl / Fz_fr) * (Fz_fl / Fz_base_f)));
+
         let delta = steerInput * (Math.PI / 5);
-        let alpha_fl = delta - Math.atan2(v + car.lf * r, u_safe - car.T/2 * r);
-        let alpha_fr = delta - Math.atan2(v + car.lf * r, u_safe + car.T/2 * r);
-        let alpha_rl =       - Math.atan2(v - car.lr * r, u_safe - car.T/2 * r);
-        let alpha_rr =       - Math.atan2(v - car.lr * r, u_safe + car.T/2 * r);
+        let delta_fl = delta + toe_f * f_comp_fl;
+        let delta_fr = delta - toe_f * f_comp_fr;
+        let delta_rl =  toe_r;
+        let delta_rr = -toe_r;
+
+        let alpha_fl = delta_fl - Math.atan2(v + car.lf * r, u_left);
+        let alpha_fr = delta_fr - Math.atan2(v + car.lf * r, u_right);
+        let alpha_rl = delta_rl - Math.atan2(v - car.lr * r, u_left);
+        let alpha_rr = delta_rr - Math.atan2(v - car.lr * r, u_right);
 
         let engineForce = accelInput * 4500; 
         let brakeForce = brakeInput * 11000; 
@@ -1089,11 +1775,22 @@
             calcSlipFactor(alpha_rl, Fz_rl, Fx_rl, car.C_alpha_r), calcSlipFactor(alpha_rr, Fz_rr, Fx_rr, car.C_alpha_r)
         ];
 
-        let sumFx = Fx_fl * Math.cos(delta) - Fy_fl * Math.sin(delta) + Fx_fr * Math.cos(delta) - Fy_fr * Math.sin(delta) + Fx_rl + Fx_rr;
-        let sumFy = Fx_fl * Math.sin(delta) + Fy_fl * Math.cos(delta) + Fx_fr * Math.sin(delta) + Fy_fr * Math.cos(delta) + Fy_rl + Fy_rr;
-        let sumMz = car.lf * ( (Fx_fl * Math.sin(delta) + Fy_fl * Math.cos(delta)) + (Fx_fr * Math.sin(delta) + Fy_fr * Math.cos(delta)) )
-                  - car.lr * (Fy_rl + Fy_rr)
-                  + (car.T/2) * ( -(Fx_fl * Math.cos(delta) - Fy_fl * Math.sin(delta)) + (Fx_fr * Math.cos(delta) - Fy_fr * Math.sin(delta)) - Fx_rl + Fx_rr );
+        // 各輪の角度(操舵角＋トー角)に基づき、車体座標系の前後力・横力へ変換（トー角による直進スクラブ抵抗・旋回ドラッグを含む）
+        let Fx_fl_car = Fx_fl * Math.cos(delta_fl) - Fy_fl * Math.sin(delta_fl);
+        let Fy_fl_car = Fx_fl * Math.sin(delta_fl) + Fy_fl * Math.cos(delta_fl);
+        let Fx_fr_car = Fx_fr * Math.cos(delta_fr) - Fy_fr * Math.sin(delta_fr);
+        let Fy_fr_car = Fx_fr * Math.sin(delta_fr) + Fy_fr * Math.cos(delta_fr);
+
+        let Fx_rl_car = Fx_rl * Math.cos(delta_rl) - Fy_rl * Math.sin(delta_rl);
+        let Fy_rl_car = Fx_rl * Math.sin(delta_rl) + Fy_rl * Math.cos(delta_rl);
+        let Fx_rr_car = Fx_rr * Math.cos(delta_rr) - Fy_rr * Math.sin(delta_rr);
+        let Fy_rr_car = Fx_rr * Math.sin(delta_rr) + Fy_rr * Math.cos(delta_rr);
+
+        let sumFx = Fx_fl_car + Fx_fr_car + Fx_rl_car + Fx_rr_car;
+        let sumFy = Fy_fl_car + Fy_fr_car + Fy_rl_car + Fy_rr_car;
+        let sumMz = car.lf * (Fy_fl_car + Fy_fr_car)
+                  - car.lr * (Fy_rl_car + Fy_rr_car)
+                  + (car.T / 2) * ((Fx_fl_car - Fx_fr_car) + (Fx_rl_car - Fx_rr_car));
 
         let du = sumFx / car.mass + v * r, dv = sumFy / car.mass - u * r, dr = sumMz / car.Iz;
         let dx = u * Math.cos(yaw) - v * Math.sin(yaw), dy = u * Math.sin(yaw) + v * Math.cos(yaw), dyaw = r;
@@ -1182,7 +1879,18 @@
     }
 
     function updateHUD() {
-        document.getElementById('speed-disp').innerText = Math.abs(Math.round(state[3] * 3.6));
+        const speedKmh = Math.abs(Math.round(state[3] * 3.6));
+        document.getElementById('speed-disp').innerText = speedKmh;
+        
+        const bottomSpeedEl = document.getElementById('speed-disp-bottom');
+        if (bottomSpeedEl) bottomSpeedEl.innerText = speedKmh;
+        
+        const speedBarEl = document.getElementById('speed-bar-fill');
+        if (speedBarEl) {
+            const pct = Math.min(100, (speedKmh / 180) * 100);
+            speedBarEl.style.width = `${pct}%`;
+        }
+
         if (raceState === 'RACING') {
             document.getElementById('hud-lap').innerText = currentLap === 0 ? "OUT LAP" : `LAP: ${currentLap} / ${currentCourse.laps}`;
             document.getElementById('hud-time').innerText = currentLap > 0 ? `TIME: ${formatTime(performance.now() - currentLapStartTime)}` : "TIME: 00:00.000";
@@ -1202,7 +1910,7 @@
         currentCourseId = courseId;
         currentCourse = courses[courseId];
         
-        // 3Dコース（ゲートと道路）のセットアップ
+        // 3Dコース（道路・縁石・背景の木々）のセットアップ
         setupCourse3D(currentCourse);
 
         // 車の3Dモデルを再構築
@@ -1216,6 +1924,7 @@
         inputSteer = 0; inputAccel = 0; inputBrake = 0; touchControl.active = false;
         
         absEnabled = document.getElementById('abs-toggle').checked;
+        updateToeUI();
         
         currentLap = 0; nextGateIndex = 0; lapTimes = [];
         tireSlips = [0, 0, 0, 0];
@@ -1234,6 +1943,7 @@
         document.getElementById('replay-ui').classList.add('hidden');
         document.getElementById('ui-layer').classList.remove('hidden');
         document.getElementById('joystick-base').classList.remove('hidden');
+        document.getElementById('speedometer-bottom').classList.remove('hidden');
         document.getElementById('hud-layer').classList.remove('hidden');
         
         // --- フレームレート独立化のための初期化 ---
@@ -1247,6 +1957,7 @@
         raceState = 'FINISHED'; isTiming = false; 
         document.getElementById('ui-layer').classList.add('hidden');
         document.getElementById('joystick-base').classList.add('hidden');
+        document.getElementById('speedometer-bottom').classList.add('hidden');
         document.getElementById('hud-layer').classList.add('hidden');
         
         let html = ""; let total = lapTimes.reduce((a, b) => a + b, 0);
@@ -1383,9 +2094,10 @@
             let rState = interpolateData(t, currentRunData);
             if (!rState) { requestAnimationFrame(loop); return; }
 
-            // プレイヤー車の3D座標・回転更新 (X, Y -> X, Z)
-            carMesh.position.set(rState[1], 0.5, rState[2]);
+            // プレイヤー車の3D座標・回転更新 (路面高さ Y = 0.04 に接地)
+            carMesh.position.set(rState[1], 0.04, rState[2]);
             carMesh.rotation.y = -rState[3]; // Three.jsはY軸回転（逆向き）
+            updateCarVisuals(carMesh, rState[4], rState[5], rState[6], 0, rState[4] * rState[6] * 0.4, frameTime);
             
             // 煙エフェクトの発生 (rStateのインデックスに注意: 1=x, 2=y, 3=yaw, 8~11=slips)
             handleSmokeEmissions([rState[1], rState[2], rState[3]], [rState[8], rState[9], rState[10], rState[11]], currentCar);
@@ -1394,7 +2106,7 @@
                 let gState = interpolateData(t, ghostData);
                 if (gState) {
                     ghostMesh.visible = true;
-                    ghostMesh.position.set(gState[1], 0.5, gState[2]);
+                    ghostMesh.position.set(gState[1], 0.04, gState[2]);
                     ghostMesh.rotation.y = -gState[3];
                 } else {
                     ghostMesh.visible = false;
@@ -1452,16 +2164,17 @@
         }
         
         if (currentCourse && carMesh) {
-            // プレイヤー車の3D座標・回転更新
-            carMesh.position.set(state[0], 0.5, state[1]);
+            // プレイヤー車の3D座標・回転更新 (路面高さ Y = 0.04 に接地)
+            carMesh.position.set(state[0], 0.04, state[1]);
             carMesh.rotation.y = -state[2];
+            updateCarVisuals(carMesh, inputSteer, inputBrake, state[3], prev_ax, prev_ay, frameTime);
 
             if (ghostData && raceState === 'RACING' && isTiming) {
                 let t = performance.now() - raceStartTime;
                 let gState = interpolateData(t, ghostData);
                 if (gState) {
                     ghostMesh.visible = true;
-                    ghostMesh.position.set(gState[1], 0.5, gState[2]);
+                    ghostMesh.position.set(gState[1], 0.04, gState[2]);
                     ghostMesh.rotation.y = -gState[3];
                 } else {
                     ghostMesh.visible = false;
